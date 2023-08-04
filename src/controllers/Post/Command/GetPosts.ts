@@ -43,7 +43,6 @@ export class GetPosts implements ICommand {
                     (reaction) => reaction.dislike === true
                 ).length;
                 const numberOfComments = post.comments.length;
-
                 return {
                     ...post.toObject(),
                     content: simplifiedText,
@@ -60,7 +59,7 @@ export class GetPosts implements ICommand {
             });
         } catch (error) {
             res.status(500).json({
-                message: 'Something went wrong.',
+                message: 'Posts could not be loaded.',
             });
         }
     }

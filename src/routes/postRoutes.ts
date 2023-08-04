@@ -69,7 +69,7 @@ postRoutes.delete('/post/postImage/:fileName', checkAuth, (req: any, res) => {
     fs.unlink(filePath, (err) => {
         if (err) {
             res.status(500).json({
-                message: 'Something went wrong',
+                message: 'File could not be deleted.',
             });
             return;
         }

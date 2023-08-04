@@ -44,7 +44,7 @@ export class CommentStrategy implements IStrategy {
 
             res.status(200).json({ message: 'Comment added successfully.' });
         } catch (error) {
-            res.status(500).json({ message: 'Something went wrong.' });
+            res.status(500).json({ message: 'Comment addition failed.' });
         }
     }
 }

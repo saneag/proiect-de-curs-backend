@@ -57,7 +57,7 @@ export class DislikeStrategy implements IStrategy {
 
             res.status(200).json({ message: 'Success.' });
         } catch (error) {
-            res.status(500).json({ message: 'Something went wrong.' });
+            res.status(500).json({ message: 'Dislike failed.' });
         }
     }
 }

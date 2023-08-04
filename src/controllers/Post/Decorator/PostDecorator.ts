@@ -2,10 +2,12 @@ import { PostFacade } from '../Facade/PostFacade';
 
 export class PostDecorator {
     decorateText(content: string) {
-        return new PostFacade().decorateText(content);
+        const postFacade = new PostFacade();
+        return postFacade.decorateText(content);
     }
 
     simplifyText(content: string) {
-        return new PostFacade().simplifyText(content);
+        const postFacade = new PostFacade();
+        return postFacade.simplifyText(content);
     }
 }

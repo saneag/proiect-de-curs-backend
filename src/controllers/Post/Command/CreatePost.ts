@@ -48,7 +48,7 @@ export class CreatePost implements ICommand {
             });
         } catch (error) {
             res.status(500).json({
-                message: 'Something went wrong.',
+                message: 'Post creation failed.',
             });
         }
     }

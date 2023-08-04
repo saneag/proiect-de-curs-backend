@@ -63,7 +63,7 @@ userRoutes.delete('/user/userAvatar/:fileName', checkAuth, (req: any, res) => {
     fs.unlink(filePath, (err) => {
         if (err) {
             res.status(500).json({
-                message: 'Something went wrong',
+                message: 'File deletion failed',
             });
             return;
         }
