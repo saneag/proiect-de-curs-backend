@@ -8,7 +8,7 @@
     "build": "node -e \"require('fs').rmSync('./build',{recursive:true,force:true})\" && tsc",
     "copy-uploads": "node -e \"require('fs').cpSync('./src/uploads','./build/uploads',{recursive:true})\"",
     "prod": "npm run build && npm run copy-uploads && node build/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run build && node --test tests/integrity.test.cjs"
   },
   "keywords": [],
   "author": "",
@@ -31,6 +31,7 @@
     "@types/jsonwebtoken": "^9.0.1",
     "@types/multer": "^1.4.7",
     "@types/node": "^18.15.13",
+    "mongodb-memory-server-core": "^11.3.0",
     "ncp": "^2.0.0",
     "ts-node": "^10.9.1",
     "typescript": "^5.0.4"

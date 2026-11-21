@@ -52,6 +52,10 @@ export class RefreshAccessToken implements ICommand {
                 accessToken: accessToken,
             });
         } catch (error) {
+            if (error instanceof jwt.JsonWebTokenError) {
+                res.status(401).json({ message: 'Invalid or expired refresh token' });
+                return;
+            }
             console.error(error as Error);
             res.status(500).send('Server error');
         }

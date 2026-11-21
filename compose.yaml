@@ -50,7 +50,7 @@ services:
     build:
       context: ../proiect-de-curs-frontend
       args:
-        REACT_APP_API_URL: /api/hf
+        VITE_API_URL: /api/hf
     restart: unless-stopped
     ports:
       - "127.0.0.1:8082:80"
