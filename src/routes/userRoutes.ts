@@ -45,6 +45,10 @@ userRoutes.post(
     checkAuth,
     upload.single('avatar'),
     (req: any, res) => {
+        if (!req.file) {
+            res.status(400).json({ message: 'An avatar image is required.' });
+            return;
+        }
         res.json({
             url: `uploads/userAvatar/${req.file.filename}`,
         });
@@ -58,7 +62,12 @@ userRoutes.patch(
 );
 
 userRoutes.delete('/user/userAvatar/:fileName', checkAuth, (req: any, res) => {
-    const filePath = path.join(__dirname, `uploads/${req.params.fileName}`);
+    const fileName = req.params.fileName;
+    if (path.basename(fileName) !== fileName) {
+        res.status(400).json({ message: 'Invalid file name.' });
+        return;
+    }
+    const filePath = path.resolve(__dirname, '../uploads/userAvatar', fileName);
 
     fs.unlink(filePath, (err) => {
         if (err) {

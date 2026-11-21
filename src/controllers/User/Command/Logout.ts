@@ -1,10 +1,15 @@
 import { Request, Response } from 'express';
 
 import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
+import User from '../../../models/User';
 
 export class Logout implements ICommand {
     public async execute(req: Request, res: Response): Promise<void> {
         try {
+            const { refreshToken } = req.body;
+            if (typeof refreshToken === 'string') {
+                await User.updateOne({ refreshToken }, { $unset: { refreshToken: 1 } });
+            }
             res.cookie('accessToken', '', {
                 httpOnly: true,
                 expires: new Date(0),

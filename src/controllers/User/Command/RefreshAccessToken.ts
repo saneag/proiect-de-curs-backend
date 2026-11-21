@@ -10,22 +10,7 @@ export class RefreshAccessToken implements ICommand {
     public async execute(req: Request, res: Response): Promise<void> {
         try {
             const { refreshToken } = req.body;
-            let isExpired = false;
-
-            jwt.verify(
-                refreshToken,
-                process.env.JWTREFRESHSECRET as string,
-                function (err: any, decoded: any) {
-                    if (err) {
-                        isExpired = true;
-                    } else {
-                        const currentTime = Math.floor(Date.now() / 1000); // in seconds
-                        isExpired = decoded.exp < currentTime;
-                    }
-                }
-            );
-
-            if (isExpired) {
+            if (typeof refreshToken !== 'string') {
                 res.status(401).json({
                     message: 'Invalid refresh token',
                 });
@@ -39,12 +24,18 @@ export class RefreshAccessToken implements ICommand {
 
             const user = await User.findOne({
                 _id: decoded.userId,
-            }).lean();
+            }).select('+refreshToken').lean();
 
             if (!user) {
                 res.status(401).json({
                     message: 'Invalid refresh token',
                 });
+                return;
+            }
+
+            // Only the currently issued token remains valid; logout/re-login revokes older tokens.
+            if (user.refreshToken !== refreshToken) {
+                res.status(401).json({ message: 'Invalid refresh token' });
                 return;
             }
 

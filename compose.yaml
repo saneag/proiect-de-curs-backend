@@ -1,0 +1,62 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?Set MONGO_ROOT_USER in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
+      MONGO_APP_USER: ${MONGO_APP_USER:?Set MONGO_APP_USER in .env}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?Set MONGO_APP_PASSWORD in .env}
+      MONGO_APP_DATABASE: ${MONGO_APP_DATABASE:-friendo}
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--username",
+          "${MONGO_ROOT_USER}",
+          "--password",
+          "${MONGO_ROOT_PASSWORD}",
+          "--authenticationDatabase",
+          "admin",
+          "--eval",
+          "db.adminCommand('ping').ok",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 5000
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8082}
+      JWTSECRET: ${JWTSECRET:?Set JWTSECRET in .env}
+      JWTREFRESHSECRET: ${JWTREFRESHSECRET:?Set JWTREFRESHSECRET in .env}
+      MONGOURI: mongodb://${MONGO_APP_USER}:${MONGO_APP_PASSWORD}@mongodb:27017/${MONGO_APP_DATABASE:-friendo}?authSource=${MONGO_APP_DATABASE:-friendo}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/build/uploads
+
+  frontend:
+    build:
+      context: ../proiect-de-curs-frontend
+      args:
+        REACT_APP_API_URL: /api/hf
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:80"
+    depends_on:
+      - api
+
+volumes:
+  mongodb_data:
+  uploads_data:

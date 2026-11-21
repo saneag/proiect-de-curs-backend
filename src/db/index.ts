@@ -5,18 +5,13 @@ dotenv.config();
 
 class Database {
     private static _instance: Database;
-    private readonly connection: mongoose.Connection;
+    private constructor() {}
 
-    private constructor() {
-        mongoose.connect(process.env.MONGOURI as string).then(() => {});
-
-        this.connection = mongoose.connection;
-        this.connection.on('error', (err) => {
-            console.error('connection error:', err);
-        });
-        this.connection.once('open', () => {
-            console.log('Connected to Database');
-        });
+    public async connect(): Promise<void> {
+        const mongoUri = process.env.MONGOURI;
+        if (!mongoUri) throw new Error('MONGOURI is required');
+        await mongoose.connect(mongoUri);
+        console.log('Connected to Database');
     }
 
     public static getInstance(): Database {
@@ -29,7 +24,7 @@ class Database {
     }
 
     public getConnection(): mongoose.Connection {
-        return this.connection;
+        return mongoose.connection;
     }
 }
 

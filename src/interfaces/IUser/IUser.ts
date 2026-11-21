@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 export interface IUser extends ISimpleUser, mongoose.Document {
     _id: string;
     passwordHash: string;
+    refreshToken?: string;
     description: string;
     role: 'user' | 'moderator' | 'admin';
     createdAt: Date;

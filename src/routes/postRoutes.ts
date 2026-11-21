@@ -40,6 +40,10 @@ postRoutes.post(
     checkAuth,
     upload.single('postImage'),
     (req: any, res) => {
+        if (!req.file) {
+            res.status(400).json({ message: 'An image file is required.' });
+            return;
+        }
         res.json({
             url: `uploads/postImage/${req.file.filename}`,
         });
@@ -64,7 +68,12 @@ postRoutes.delete(
     PostController.deletePost.bind(PostController)
 );
 postRoutes.delete('/post/postImage/:fileName', checkAuth, (req: any, res) => {
-    const filePath = path.join(__dirname, `uploads/${req.params.fileName}`);
+    const fileName = req.params.fileName;
+    if (path.basename(fileName) !== fileName) {
+        res.status(400).json({ message: 'Invalid file name.' });
+        return;
+    }
+    const filePath = path.resolve(__dirname, '../uploads/postImage', fileName);
 
     fs.unlink(filePath, (err) => {
         if (err) {

@@ -6,6 +6,7 @@ import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 import { UserBuilder } from '../Builder/UserBuilder';
 
 import { hashPassword } from '../../../utils/PasswordHashFacade';
+import { UserDestructuring } from '../../../utils/userDestructuring';
 
 export class Register implements ICommand {
     public async execute(req: Request, res: Response): Promise<void> {
@@ -25,7 +26,7 @@ export class Register implements ICommand {
             });
 
             await user.save();
-            res.status(201).json(user);
+            res.status(201).json(UserDestructuring(user));
         } catch (error) {
             console.error(error as Error);
             res.status(409).send('Conflict');

@@ -9,21 +9,42 @@ import { PostDecorator } from '../Decorator/PostDecorator';
 export class GetPosts implements ICommand {
     public async execute(req: Request, res: Response): Promise<void> {
         try {
-            const limit = parseInt(req.query.limit as string);
-            const page = parseInt(req.query.page as string);
-            const search = (req.query.search as string) || '';
-            const email = req.query.email || '';
+            const requestedLimit = Number.parseInt(String(req.query.limit || '10'), 10);
+            const requestedPage = Number.parseInt(String(req.query.page || '1'), 10);
+            const limit = Number.isFinite(requestedLimit)
+                ? Math.min(Math.max(requestedLimit, 1), 50)
+                : 10;
+            const page = Number.isFinite(requestedPage)
+                ? Math.max(requestedPage, 1)
+                : 1;
+            const search = String(req.query.search || '');
+            const email = String(req.query.email || '');
+            const escapeRegex = (value: string) =>
+                value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
             const query: any = {};
 
             if (email !== '')
-                query['creator.email'] = { $regex: email, $options: 'i' };
+                query['creator.email'] = {
+                    $regex: escapeRegex(email),
+                    $options: 'i',
+                };
 
             if (search !== '')
                 query['$or'] = [
-                    { title: { $regex: search, $options: 'i' } },
-                    { 'creator.firstName': { $regex: search, $options: 'i' } },
-                    { 'creator.lastName': { $regex: search, $options: 'i' } },
+                    { title: { $regex: escapeRegex(search), $options: 'i' } },
+                    {
+                        'creator.firstName': {
+                            $regex: escapeRegex(search),
+                            $options: 'i',
+                        },
+                    },
+                    {
+                        'creator.lastName': {
+                            $regex: escapeRegex(search),
+                            $options: 'i',
+                        },
+                    },
                 ];
 
             const totalPostsNumber = await Post.countDocuments(query);

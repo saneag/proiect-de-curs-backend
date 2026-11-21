@@ -1,4 +1,7 @@
 import multer from 'multer';
+import path from 'path';
+import { randomUUID } from 'crypto';
+import fs from 'fs';
 
 class MulterInstance {
     private static _instance: MulterInstance;
@@ -19,14 +22,32 @@ class MulterInstance {
     public init(folderPath: string) {
         const storage = multer.diskStorage({
             destination: (_, __, cb) => {
-                cb(null, `src/uploads/${folderPath}`);
+                const destination = path.resolve(__dirname, '../uploads', folderPath);
+                fs.mkdirSync(destination, { recursive: true });
+                cb(null, destination);
             },
             filename: (_, file, cb) => {
-                cb(null, file.originalname);
+                const extensions: Record<string, string> = {
+                    'image/jpeg': '.jpg',
+                    'image/png': '.png',
+                    'image/gif': '.gif',
+                    'image/webp': '.webp',
+                };
+                cb(null, `${randomUUID()}${extensions[file.mimetype]}`);
             },
         });
 
-        this.upload = multer({ storage });
+        this.upload = multer({
+            storage,
+            limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+            fileFilter: (_req, file, cb) => {
+                if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.mimetype)) {
+                    cb(new Error('Only JPEG, PNG, GIF, and WebP images are allowed.'));
+                    return;
+                }
+                cb(null, true);
+            },
+        });
 
         return this;
     }
