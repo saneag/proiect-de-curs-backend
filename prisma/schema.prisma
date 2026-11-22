@@ -1,0 +1,113 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  user
+  moderator
+  admin
+}
+
+enum ReactionType {
+  LIKE
+  DISLIKE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  firstName    String
+  lastName     String
+  email        String   @unique
+  passwordHash String
+  refreshToken String?
+  avatarUrl    String   @default("")
+  description  String   @default("")
+  role         Role     @default(user)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+  posts        Post[]
+  comments     Comment[]
+  reactions    Reaction[]
+  followers    Follow[] @relation("Followed")
+  following    Follow[] @relation("Follower")
+  requestsSent FollowRequest[] @relation("RequestSender")
+  requestsReceived FollowRequest[] @relation("RequestRecipient")
+
+  @@map("users")
+}
+
+model Post {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  image     String   @default("")
+  creatorId String
+  creator   User     @relation(fields: [creatorId], references: [id])
+  creatorSnapshot Json
+  tags      String[] @default([])
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  comments  Comment[]
+  reactions Reaction[]
+
+  @@index([createdAt, id])
+  @@index([creatorId])
+  @@map("posts")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  creatorId String
+  creator   User     @relation(fields: [creatorId], references: [id])
+  creatorSnapshot Json
+  content   String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([postId, createdAt])
+  @@index([creatorId])
+  @@map("comments")
+}
+
+model Reaction {
+  id     String @id @default(uuid())
+  postId String
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   ReactionType
+
+  @@unique([postId, userId])
+  @@index([userId])
+  @@map("reactions")
+}
+
+model Follow {
+  followerId String
+  followingId String
+  follower User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Followed", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+model FollowRequest {
+  senderId String
+  recipientId String
+  sender User @relation("RequestSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User @relation("RequestRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@id([senderId, recipientId])
+  @@index([recipientId])
+  @@map("follow_requests")
+}
