@@ -1,7 +1,7 @@
 # Ubuntu deployment: PostgreSQL, Prisma and Docker
 
-Architecture: Cloudflare Tunnel -> 127.0.0.1:8082 -> frontend Nginx -> API -> PostgreSQL.
-Only the frontend has a loopback host port. The database and API remain private.
+Architecture: Cloudflare Tunnel -> frontend Nginx -> API -> PostgreSQL.
+Frontend/backend default to loopback host ports 5000/5001. PostgreSQL remains private.
 Both repositories must be sibling directories. Deploy the matching `id` frontend
 and Prisma backend together. Existing MongoDB volumes are not converted automatically.
 
@@ -69,11 +69,11 @@ refresh tokens are cleared.
 ## 7. Start, verify and expose
 
 ```bash
-sudo docker compose up -d
+bash scripts/start-friendo.sh
 sudo docker compose ps -a
 sudo docker compose logs --tail=100 postgres migrate api frontend
-curl -I http://127.0.0.1:8082/
-curl -i http://127.0.0.1:8082/api/hf/user
+curl -I http://127.0.0.1:5000/
+curl -i http://127.0.0.1:5001/api/hf/user
 ```
 
 Expect frontend HTTP 200 and unauthenticated API HTTP 403. The one-shot `migrate`
@@ -81,11 +81,85 @@ service should exit 0; the API waits for success. A failed migration prevents AP
 startup. For subsequent schema updates, explicitly run the migration service before
 starting the updated API.
 
-Point your existing Cloudflare Tunnel to `http://127.0.0.1:8082`. No router port
+The launcher prefers 5000/5001, then 5001/5002, 5002/5003, etc. It stops only the
+current project's frontend/API before checking socket availability and Docker port
+reservations. Other applications and PostgreSQL remain running. Use the ports printed
+by the launcher in the curl commands if the preferred pair was busy. A process can
+claim a port between selection and Docker startup; if Docker reports a bind conflict,
+run the launcher again. It never imports backup data.
+
+To prefer 3000/3001 instead:
+
+```bash
+bash scripts/start-friendo.sh 3000
+```
+
+Use this launcher on future starts too. Plain `compose up` uses `.env`/default ports,
+while the launcher supplies the automatically chosen pair to Compose. Containers keep
+their assigned pair across ordinary Docker/server restarts; choosing new ports after
+a conflict requires running the launcher again.
+
+Point your existing Cloudflare Tunnel to the frontend URL printed by the launcher
+(normally `http://127.0.0.1:5000`). Update the tunnel origin if the chosen port changes.
+Both ports bind to localhost, so public users still access the frontend via the tunnel
+and `/api` is proxied internally. No router port
 forwarding or public PostgreSQL port is needed. Keep unrelated sites/tunnels intact.
 Verify login, session refresh, feed/search, profiles, post create/edit/delete,
 reactions, comments, upload/view/delete images and logout. Restart the stack and
 confirm posts and uploads persist.
+
+## Bash shortcut and automatic startup at boot
+
+The Bash wrapper starts Docker, prevents overlapping launcher runs and calls the
+same Python port selector every time. Python 3, systemd and flock (util-linux) are
+available on standard Ubuntu installations. After pulling the code, create/update
+the earlier shortcut from your normal SSH account:
+
+```bash
+mkdir -p ~/bin
+cat > ~/bin/start-friendo <<'EOF'
+#!/usr/bin/env bash
+exec bash "$HOME/proiect-de-curs/proiect-de-curs-backend/scripts/start-friendo.sh" "$@"
+EOF
+chmod +x ~/bin/start-friendo
+~/bin/start-friendo
+```
+
+You can run it from `~` immediately after logging in. It prompts for sudo when
+needed. An optional argument changes the preferred base: `~/bin/start-friendo 3000`.
+
+To use exactly the same logic automatically on every Ubuntu boot, run the following
+from the backend directory (the generated service records its absolute path):
+
+```bash
+cd ~/proiect-de-curs/proiect-de-curs-backend
+sudo tee /etc/systemd/system/friendo.service >/dev/null <<EOF
+[Unit]
+Description=Start Friendo with automatic port selection
+Requires=docker.service
+Wants=network-online.target
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=$PWD
+ExecStart=/usr/bin/bash $PWD/scripts/start-friendo.sh
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now friendo.service
+```
+
+This runs once per boot; Docker restart policies supervise the containers afterward.
+`active (exited)` is normal for this one-shot service. Run `sudo systemctl restart
+friendo` to rerun port selection, and `sudo journalctl -u friendo -b --no-pager` to
+see the chosen URLs. Startup may select a different frontend port, so update the
+Cloudflare Tunnel origin if necessary. Boot-time Docker builds/startup still require
+verification on the server. The script never imports or deletes database records.
 
 ## Backups and rollback
 

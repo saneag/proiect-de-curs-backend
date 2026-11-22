@@ -31,6 +31,8 @@ services:
       context: .
       target: runtime
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-5001}:5000"
     environment:
       PORT: 5000
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8082}
@@ -50,7 +52,7 @@ services:
         VITE_API_URL: /api/hf
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8082:80"
+      - "127.0.0.1:${FRONTEND_PORT:-5000}:80"
     depends_on:
       - api
 
