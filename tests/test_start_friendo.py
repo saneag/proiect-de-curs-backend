@@ -50,6 +50,7 @@ class PortTests(unittest.TestCase):
                 patch.object(launcher.os, 'chdir'), \
                 patch.object(launcher, 'docker_reserved_ports', return_value={5000}), \
                 patch.object(launcher, 'find_pair', return_value=(5001, 5002)) as select, \
+                patch.object(launcher, 'start_tunnel') as tunnel, \
                 patch.object(launcher.subprocess, 'run') as run, \
                 patch('builtins.print'):
             launcher.main()
@@ -57,6 +58,32 @@ class PortTests(unittest.TestCase):
             up = next(call for call in run.call_args_list if call.args[0] == ['docker', 'compose', 'up', '-d'])
             self.assertEqual(up.kwargs['env']['FRONTEND_PORT'], '5001')
             self.assertEqual(up.kwargs['env']['BACKEND_PORT'], '5002')
+            tunnel.assert_called_once_with(5001)
+
+    def test_tunnel_uses_selected_frontend_port_and_a_separate_service(self):
+        with patch.object(launcher.shutil, 'which', return_value='/usr/bin/cloudflared'), \
+                patch.object(launcher.subprocess, 'run') as run, \
+                patch('builtins.print'):
+            launcher.start_tunnel(5003)
+        self.assertEqual(run.call_args_list[0].args[0], ['systemctl', 'stop', 'friendo-tunnel.service'])
+        command = run.call_args_list[1].args[0]
+        self.assertEqual(command[0], 'systemd-run')
+        self.assertIn('--unit=friendo-tunnel.service', command)
+        self.assertIn('--property=Restart=on-failure', command)
+        self.assertEqual(command[-4:], ['/usr/bin/cloudflared', 'tunnel', '--url', 'http://127.0.0.1:5003'])
+
+    def test_missing_cloudflared_keeps_app_running(self):
+        with patch.object(launcher.shutil, 'which', return_value=None), \
+                patch.object(launcher.subprocess, 'run') as run, \
+                patch('builtins.print'):
+            launcher.start_tunnel(5000)
+            run.assert_not_called()
+
+    def test_tunnel_start_failure_does_not_stop_app(self):
+        with patch.object(launcher.shutil, 'which', return_value='/usr/bin/cloudflared'), \
+                patch.object(launcher.subprocess, 'run', side_effect=[None, launcher.subprocess.CalledProcessError(1, 'systemd-run')]), \
+                patch('builtins.print'):
+            launcher.start_tunnel(5000)
 
 
 if __name__ == '__main__':

@@ -5,10 +5,12 @@ import json
 import os
 from pathlib import Path
 import socket
+import shutil
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
+TUNNEL_UNIT = 'friendo-tunnel.service'
 
 
 def find_pair(start, reserved=()):
@@ -42,6 +44,29 @@ def docker_reserved_ports():
             for binding in (bindings or []) if binding.get('HostPort')}
 
 
+def start_tunnel(frontend):
+    cloudflared = shutil.which('cloudflared')
+    if not cloudflared:
+        print('App is running; install cloudflared to enable the public tunnel.', file=sys.stderr)
+        return
+    # A separate systemd unit survives logout and the end of the boot launcher.
+    # Restart only our own tunnel, leaving other Cloudflare services untouched.
+    subprocess.run(['systemctl', 'stop', TUNNEL_UNIT], check=False,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.run([
+            'systemd-run', '--unit=' + TUNNEL_UNIT, '--collect',
+            '--property=Restart=on-failure', '--property=RestartSec=5',
+            '--', cloudflared, 'tunnel', '--url', f'http://127.0.0.1:{frontend}',
+        ], check=True)
+    except subprocess.CalledProcessError:
+        print('App is running, but its Cloudflare tunnel could not start. Check systemd logs.', file=sys.stderr)
+        return
+    print('Public tunnel started in the background. Its temporary URL may change after restart.')
+    print('Find the public URL: sudo journalctl -u friendo-tunnel -b --no-pager -o cat | '
+          "grep -oE 'https://[a-z0-9-]+\\.trycloudflare\\.com' | tail -1")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('base', type=int, nargs='?', default=5000,
@@ -65,6 +90,7 @@ def main():
     print(f'Frontend: http://127.0.0.1:{frontend}/')
     print(f'Backend:  http://127.0.0.1:{backend}/api/hf/user (403 without a token is expected)')
     print(f'Cloudflare Tunnel origin: http://127.0.0.1:{frontend}')
+    start_tunnel(frontend)
     print('Use this script again to select ports; existing containers retain their ports across reboots.')
 
 

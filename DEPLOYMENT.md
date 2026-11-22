@@ -99,7 +99,7 @@ while the launcher supplies the automatically chosen pair to Compose. Containers
 their assigned pair across ordinary Docker/server restarts; choosing new ports after
 a conflict requires running the launcher again.
 
-Point your existing Cloudflare Tunnel to the frontend URL printed by the launcher
+If you use an existing named Cloudflare Tunnel, point it to the frontend URL printed by the launcher
 (normally `http://127.0.0.1:5000`). Update the tunnel origin if the chosen port changes.
 Both ports bind to localhost, so public users still access the frontend via the tunnel
 and `/api` is proxied internally. No router port
@@ -157,9 +157,48 @@ sudo systemctl enable --now friendo.service
 This runs once per boot; Docker restart policies supervise the containers afterward.
 `active (exited)` is normal for this one-shot service. Run `sudo systemctl restart
 friendo` to rerun port selection, and `sudo journalctl -u friendo -b --no-pager` to
-see the chosen URLs. Startup may select a different frontend port, so update the
-Cloudflare Tunnel origin if necessary. Boot-time Docker builds/startup still require
+see the chosen local URLs. Startup may select a different frontend port. The temporary
+tunnel below follows that port automatically; update any separate named tunnel's
+origin yourself. Boot-time Docker builds/startup still require
 verification on the server. The script never imports or deletes database records.
+
+## Background public tunnel
+
+When `cloudflared` is installed, the launcher now starts a temporary Quick Tunnel
+automatically, using the selected frontend port. It runs in the separate transient
+`friendo-tunnel.service` unit, survives terminal logout and restarts after a process
+failure. On each Ubuntu boot, the enabled `friendo.service` creates it again. No
+change to the existing Friendo boot unit is needed: pull the updated code.
+
+After pulling, run `~/bin/start-friendo` or `sudo systemctl restart friendo`.
+Find the public URL (retry after a few seconds if the tunnel is still connecting):
+
+```bash
+sudo journalctl -u friendo-tunnel -b --no-pager -o cat | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1
+```
+
+The URL can change each time the tunnel restarts. Quick Tunnels are intended for
+temporary access; a permanent domain needs a named tunnel. The launcher replaces
+only its own tunnel service; other `cloudflared` services or previously launched
+`nohup` processes are left untouched. A previously started nohup tunnel is no longer
+needed; stop that specific process separately if it is still running.
+
+To stop public access through this managed temporary tunnel:
+
+```bash
+sudo systemctl stop friendo-tunnel
+```
+
+Stopping only the app containers does not stop this separate tunnel. To keep both
+stopped across reboots, disable `friendo.service`, stop `friendo-tunnel.service`, and
+stop the Compose stack. Running the launcher recreates the tunnel. If cloudflared is
+missing or cannot start, the local app remains running and the launcher reports it.
+Check `sudo journalctl -u friendo-tunnel -b --no-pager` for connection errors. A new
+public URL appears only after successful contact with Cloudflare; if startup fails,
+the latest URL in old logs may no longer work. Live systemd/tunnel startup must be
+verified on Ubuntu; local tests use mocked systemd commands.
+
+Reference: https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/
 
 ## Backups and rollback
 
