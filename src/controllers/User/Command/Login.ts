@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 
-import User from '../../../models/User';
+import { prisma } from '../../../db';
 
 import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 
@@ -11,7 +11,7 @@ export class Login implements ICommand {
     public async execute(req: Request, res: Response): Promise<void> {
         try {
             const { email, password } = req.body;
-            const user = await User.findOne({ email }).lean();
+            const user = await prisma.user.findUnique({ where: { email } });
 
             if (!user) {
                 res.status(401).json({
@@ -33,7 +33,7 @@ export class Login implements ICommand {
             }
 
             const accessToken = jwt.sign(
-                { userId: user._id },
+                { userId: user.id },
                 process.env.JWTSECRET as string,
                 {
                     expiresIn: '1h',
@@ -41,23 +41,17 @@ export class Login implements ICommand {
             );
 
             const refreshToken = jwt.sign(
-                { userId: user._id },
+                { userId: user.id },
                 process.env.JWTREFRESHSECRET as string,
                 {
                     expiresIn: '14d',
                 }
             );
 
-            await User.updateOne(
-                {
-                    _id: user._id,
-                },
-                {
-                    $set: {
-                        refreshToken,
-                    },
-                }
-            );
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { refreshToken },
+            });
 
             res.status(200).json({
                 message: 'Login successful',

@@ -1,12 +1,19 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ openssl \
     && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 RUN npm ci
-COPY tsconfig.json ./
+COPY tsconfig.json prisma.config.ts ./
+COPY prisma ./prisma
 COPY src ./src
 RUN npm run build && npm run copy-uploads
+
+# Separate one-shot migration/import image; the API image does not need the CLI.
+FROM build AS migration
+COPY scripts ./scripts
+USER node
+CMD ["npm", "run", "db:migrate"]
 
 FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production PORT=5000

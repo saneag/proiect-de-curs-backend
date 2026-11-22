@@ -1,17 +1,11 @@
-import mongoose from 'mongoose';
-
-export interface IUser extends ISimpleUser, mongoose.Document {
-    _id: string;
+export interface IUser extends ISimpleUser {
+    id: string;
     passwordHash: string;
-    refreshToken?: string;
+    refreshToken?: string | null;
     description: string;
     role: 'user' | 'moderator' | 'admin';
     createdAt: Date;
     updatedAt: Date;
-    followers: string[];
-    following: string[];
-    followRequests: string[];
-    followingRequests: string[];
 }
 
 export interface IUserUpdate {

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 
-import User from '../../../models/User';
+import { prisma } from '../../../db';
 
 import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 import { UserDestructuring } from '../../../utils/userDestructuring';
@@ -8,7 +8,9 @@ import { UserDestructuring } from '../../../utils/userDestructuring';
 export class GetUser implements ICommand {
     public async execute(req: Request, res: Response): Promise<void> {
         try {
-            const user = await User.findById(req.params.userId).lean();
+            const user = await prisma.user.findUnique({
+                where: { id: req.params.userId },
+            });
 
             if (!user) {
                 res.status(404).json({
@@ -20,6 +22,7 @@ export class GetUser implements ICommand {
             const destructuredUser = UserDestructuring(user);
 
             res.status(200).json({
+                id: destructuredUser.id,
                 firstName: destructuredUser.firstName,
                 lastName: destructuredUser.lastName,
                 email: destructuredUser.email,

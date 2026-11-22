@@ -1,22 +1,22 @@
 import { Request, Response } from 'express';
-import User from '../../../models/User';
-import Post from '../../../models/Post';
+import { prisma } from '../../../db';
 import { ICommand } from '../../../interfaces/IPost/Command/ICommand';
 
 export class DeletePost implements ICommand {
     public async execute(req: Request, res: Response): Promise<void> {
         try {
-            const user = await User.findById(req.params.userId).lean();
+            const user = await prisma.user.findUnique({
+                where: { id: req.params.userId },
+            });
             if (!user) {
                 res.status(401).json({ message: 'Invalid credentials.' });
                 return;
             }
 
-            const post = await Post.findOneAndDelete({
-                _id: req.params.postId,
-                'creator.email': user.email,
+            const post = await prisma.post.deleteMany({
+                where: { id: req.params.postId, creatorId: user.id },
             });
-            if (!post) {
+            if (!post.count) {
                 res.status(404).json({ message: 'Post not found.' });
                 return;
             }

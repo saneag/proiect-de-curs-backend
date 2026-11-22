@@ -9,10 +9,18 @@ export const loginValidation = [
 
 export const registerValidation = [
     body('email', 'Invalid email format').isEmail(),
-    body('password', 'Password must contain at least 12 characters').isLength({ min: 12 }),
-    body('password', 'Password must be at most 72 UTF-8 bytes').custom((value: string) =>
-        Buffer.byteLength(value, 'utf8') <= 72
+    body('password', 'Password must contain at least 12 characters').isLength({
+        min: 12,
+    }),
+    body('password', 'Password must be at most 72 UTF-8 bytes').custom(
+        (value: string) => Buffer.byteLength(value, 'utf8') <= 72
     ),
+    body('firstName')
+        .trim()
+        .matches(/^[a-zA-Z0-9]{3,20}$/),
+    body('lastName')
+        .trim()
+        .matches(/^[a-zA-Z0-9]{3,20}$/),
     body('firstName', 'Firstname must contain at least 3 symbols').isLength({
         min: 3,
     }),

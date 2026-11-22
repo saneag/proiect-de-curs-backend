@@ -10,10 +10,11 @@ Users, posts, comments and reactions use separate tables. Ownership and new reac
 use stable user IDs. Creator snapshots remain JSONB intentionally to preserve existing
 display behavior. Follows and follow requests use relational tables.
 
-The full application migration is paused pending user approval. The separately
-requested backup import package is implemented; see BACKUP-IMPORT.md. Only users and
-posts backups were supplied, including embedded comments and reactions. No standalone
-comments or notifications backup has been imported.
+The local backend/frontend migration and PostgreSQL API/import tests are implemented.
+Docker configuration is updated; Docker image builds, startup and server routing
+still require verification on Ubuntu because Docker is unavailable locally.
+See DEPLOYMENT.md for steps 5–7. Only users/posts backups were supplied, including
+embedded comments and reactions; no notifications backup was imported.
 
 ## Implementation sequence
 
@@ -57,3 +58,17 @@ Writes accepted only by PostgreSQL require reconciliation before rollback; do no
 silently discard them. No live database is migrated by changing this repository.
 
 Prisma reference: https://www.prisma.io/docs/orm/v7/prisma-client/queries/transactions
+
+## Local verification results
+
+- Backend build and 14 API tests pass against an isolated PostgreSQL cluster.
+- 11 conversion tests and the PostgreSQL import integration test pass. The real
+  converted backups were imported and every field reconciled after reading back.
+- Frontend typecheck/production build and 12 tests pass, including `id`-based updates.
+- Browser smoke test: login, post creation, like, comment, reload/session restoration,
+  and post deletion pass against the migrated API. Image upload/view/delete is also
+  covered by the API suite.
+- Docker is not installed locally. Image builds, Compose startup/migration ordering,
+  restart persistence and public routing must still be checked on Ubuntu.
+- Both repositories must be deployed together in step 5. Steps 6–7 are in
+  DEPLOYMENT.md. No server changes were made.

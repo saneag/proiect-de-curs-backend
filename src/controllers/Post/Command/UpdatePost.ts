@@ -1,20 +1,27 @@
 import { Request, Response } from 'express';
 
-import User from '../../../models/User';
-import Post from '../../../models/Post';
+import { prisma } from '../../../db';
 import { ICommand } from '../../../interfaces/IPost/Command/ICommand';
+import { validPost } from '../../../utils/validation';
 import { PostDecorator } from '../Decorator/PostDecorator';
 
 export class UpdatePost implements ICommand {
     public async execute(req: Request, res: Response): Promise<void> {
         try {
-            const user = await User.findById(req.params.userId).lean();
+            const user = await prisma.user.findUnique({
+                where: { id: req.params.userId },
+            });
             if (!user) {
                 res.status(401).json({ message: 'Invalid credentials.' });
                 return;
             }
 
-            const updates: { title?: string; content?: string; image?: string; updatedAt: Date } = {
+            const updates: {
+                title?: string;
+                content?: string;
+                image?: string;
+                updatedAt: Date;
+            } = {
                 updatedAt: new Date(),
             };
             const { title, content, image } = req.body;
@@ -24,13 +31,17 @@ export class UpdatePost implements ICommand {
             }
             if (image !== undefined) updates.image = image;
 
-            const post = await Post.findOneAndUpdate(
-                { _id: req.params.postId, 'creator.email': user.email },
-                { $set: updates },
-                { new: true, runValidators: true }
-            );
+            if (!validPost(updates, true)) {
+                res.status(400).json({ message: 'Invalid post fields.' });
+                return;
+            }
+            if (updates.title) updates.title = updates.title.trim();
+            const post = await prisma.post.updateMany({
+                where: { id: req.params.postId, creatorId: user.id },
+                data: updates,
+            });
 
-            if (!post) {
+            if (!post.count) {
                 res.status(404).json({ message: 'Post not found.' });
                 return;
             }

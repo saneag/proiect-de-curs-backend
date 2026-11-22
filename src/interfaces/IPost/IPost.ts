@@ -1,13 +1,8 @@
-import mongoose from 'mongoose';
-
 import { ISimpleUser } from '../IUser/IUser';
 import { IComment } from './IComment';
 
-export interface IPostMongo extends IPost, mongoose.Document {
-    _id: string;
-}
-
 export interface IPost extends IImagePost {
+    id: string;
     creator: ISimpleUser;
     title: string;
     content: string;

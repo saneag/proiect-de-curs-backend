@@ -26,7 +26,7 @@ async function importData(prisma, data) {
 async function main() {
     if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
     const data = JSON.parse(fs.readFileSync(process.argv[2] || 'backups/postgresql/data.json', 'utf8'));
-    const { PrismaClient } = require('../.prisma-build/prisma/client.js');
+    const { PrismaClient } = require('../build/generated/prisma/client.js');
     const { PrismaPg } = require('@prisma/adapter-pg');
     const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
     try { console.log('Imported and verified:', await importData(prisma, data)); }

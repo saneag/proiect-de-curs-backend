@@ -6,7 +6,7 @@ const path = require('node:path');
 const net = require('node:net');
 const { isDeepStrictEqual } = require('node:util');
 const { execFileSync } = require('node:child_process');
-const { PrismaClient } = require('../.prisma-build/prisma/client.js');
+const { PrismaClient } = require('../build/generated/prisma/client.js');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const { convert } = require('../scripts/convert-backups.cjs');
 const { importData } = require('../scripts/import-backups.cjs');
@@ -19,7 +19,7 @@ test('Prisma migrations and atomic backup import on isolated PostgreSQL', { time
     });
     const databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'social-backup-test-'));
     const pg = new EmbeddedPostgres({ databaseDir, user: 'postgres', password: 'test-only-password',
-        port, persistent: false, autoRehydrateSymlinks: true,
+        port, persistent: true, autoRehydrateSymlinks: true,
         initdbFlags: ['--encoding=UTF8', '--locale=C'], onLog() {}, onError() {} });
     let prisma;
     try {
@@ -75,5 +75,7 @@ test('Prisma migrations and atomic backup import on isolated PostgreSQL', { time
     } finally {
         if (prisma) await prisma.$disconnect();
         await pg.stop();
+        assert.equal(path.dirname(path.resolve(databaseDir)), path.resolve(os.tmpdir()));
+        fs.rmSync(databaseDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
     }
 });

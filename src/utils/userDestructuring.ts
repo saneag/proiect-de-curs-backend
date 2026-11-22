@@ -1,5 +1,6 @@
 export const UserDestructuring = (user: any) => {
     const {
+        id,
         firstName,
         lastName,
         email,
@@ -11,6 +12,7 @@ export const UserDestructuring = (user: any) => {
     } = user;
 
     return {
+        id,
         firstName,
         lastName,
         email,

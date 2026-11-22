@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { strategies } from './index';
 import { IStrategy } from '../../../interfaces/IPost/Strategy/IStrategy';
-import User from '../../../models/User';
+import { prisma } from '../../../db';
 
 export class ReactStrategyContext {
     public async performAction(req: Request, res: Response): Promise<void> {
@@ -24,12 +24,13 @@ export class ReactStrategyContext {
         }
 
         try {
-            const user = await User.findById(req.params.userId).lean();
+            const user = await prisma.user.findUnique({
+                where: { id: req.params.userId },
+            });
             if (!user) {
                 res.status(401).json({ message: 'Invalid credentials.' });
                 return;
             }
-            req.body.email = user.email;
             await strategy.performAction(req, res);
         } catch (error) {
             res.status(500).json({ message: 'Reaction failed.' });

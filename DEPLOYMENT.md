@@ -1,239 +1,119 @@
-# Ubuntu deployment with Docker and Cloudflare Tunnel
+# Ubuntu deployment: PostgreSQL, Prisma and Docker
 
-This guide adapts README-home-website.md to the full Friendo application.
-Cloudflare -> 127.0.0.1:8082 -> frontend Nginx -> API -> MongoDB.
-The API and MongoDB have no published host ports. Keep your old static site
-on 8081. No router forwarding, host Nginx, or Certbot is needed here.
+Architecture: Cloudflare Tunnel -> 127.0.0.1:8082 -> frontend Nginx -> API -> PostgreSQL.
+Only the frontend has a loopback host port. The database and API remain private.
+Both repositories must be sibling directories. Deploy the matching `id` frontend
+and Prisma backend together. Existing MongoDB volumes are not converted automatically.
 
-## 1. Get the migrated code
+## 5. Get the completed migration on Ubuntu
 
-For a new installation, connect to Ubuntu, replacing your SSH details:
-
-```powershell
-ssh YOUR_USER@YOUR_SERVER_IP
-```
-
-On Ubuntu:
+Back up the old application, database and uploads. Stop the existing stack before
+pulling the new Compose file. Preserve `.env`, the Compose project name and old release
+for rollback. Do not delete volumes when stopping containers.
 
 ```bash
-mkdir -p ~/apps/proiect-de-curs-vite
-cd ~/apps/proiect-de-curs-vite
-git clone --branch master https://github.com/saneag/proiect-de-curs-frontend.git
-git clone --branch master https://github.com/saneag/proiect-de-curs-backend.git
-cd proiect-de-curs-backend
-```
-
-Both source folders must be siblings: proiect-de-curs-backend and
-proiect-de-curs-frontend. If this app is already deployed, update its existing
-source folders instead, preserving its .env, Compose project name and volumes.
-Do not create another database or replace credentials during an update.
-
-## 2. Verify prerequisites
-
-```bash
+cd /YOUR/APPS/proiect-de-curs-backend
+sudo docker compose stop
+git pull --ff-only
+cd ../proiect-de-curs-frontend
+git pull --ff-only
+cd ../proiect-de-curs-backend
 sudo docker --version
 sudo docker compose version
-cloudflared --version
-command -v cloudflared
-sudo ss -ltnp | grep ':8082 ' || true
 ```
 
-CasaOS commonly provides Docker. Install the Compose plugin if missing using
-Docker's official Ubuntu guide. If cloudflared is missing, follow your existing
-home-website guide and select the package matching your CPU architecture.
-Host Node.js/npm and MongoDB are unnecessary: Docker installs them in images.
+## 6. Configure, migrate and import
 
-If 8082 is used by another site, change the host side of 127.0.0.1:8082:80 in
-compose.yaml to a free port and use that port in all commands below. Do not
-remove an unrelated container.
-
-## 3. Configure secrets (new installation only)
-
-```bash
-cp .env.example .env
-chmod 600 .env
-nano .env
-```
-
-Fill the four blank values with different random secrets:
+For a new installation copy `.env.example` to `.env`. For an update edit the existing
+file. Keep JWT secrets unless deliberately invalidating old sessions. Generate a
+PostgreSQL password using `openssl rand -hex 32`. Set:
 
 ```dotenv
-JWTSECRET=YOUR_FIRST_RANDOM_VALUE
-JWTREFRESHSECRET=YOUR_SECOND_RANDOM_VALUE
-MONGO_ROOT_PASSWORD=YOUR_THIRD_RANDOM_VALUE
-MONGO_APP_PASSWORD=YOUR_FOURTH_RANDOM_VALUE
+POSTGRES_USER=friendo_app
+POSTGRES_PASSWORD=YOUR_PASSWORD
+POSTGRES_DB=friendo
+DATABASE_URL=postgresql://friendo_app:YOUR_PASSWORD@postgres:5432/friendo
+JWTSECRET=YOUR_EXISTING_OR_NEW_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
+JWTREFRESHSECRET=A_DIFFERENT_RANDOM_SECRET_AT_LEAST_32_CHARACTERS
+FRONTEND_ORIGIN=https://YOUR_PUBLIC_HOSTNAME
 ```
 
-Run `openssl rand -hex 32` four times to generate them. Keep the default
-MongoDB usernames/database and FRONTEND_ORIGIN=http://localhost:8082 initially.
-Compose constructs MONGOURI itself; the example host-run MONGOURI is not used.
-Never commit .env or put these secrets in public VITE_* configuration.
+Use matching database credentials in both settings. URL-encode special password
+characters in DATABASE_URL; hex passwords need no encoding. Changing environment
+credentials after PostgreSQL initialization does not change its stored password.
+Keep `.env` private (`chmod 600 .env`). No MongoDB settings are needed.
 
-FRONTEND_ORIGIN controls cross-origin CORS requests. This deployment uses
-same-origin /api/hf requests, so the localhost default does not block the
-Quick Tunnel. For a stable hostname set it to its exact origin, such as
-https://app.example.com, without a trailing slash. Keep VITE_API_URL=/api/hf.
-
-## 4. Build and start
+Schedule a maintenance window and stop writes. Stop the existing `api`/`frontend`
+containers and old `mongodb` container if present, preserving all volumes. Upload
+`backups/postgresql/data.json` separately: it is intentionally not in Git. Transfer
+existing uploads separately, preserving their paths and the `uploads_data` volume.
 
 ```bash
 sudo docker compose config --quiet
-sudo docker compose up -d --build
-sudo docker compose ps
-sudo docker compose logs --tail=100 mongodb api frontend
+sudo docker compose build migrate api frontend
+sudo docker compose up -d postgres
+sudo docker compose run --rm migrate
 ```
 
-The first build may take several minutes. MongoDB should become healthy and
-the API should log Connected to Database and Server running on port 5000.
-The frontend builds with Vite and serves dist/ through Nginx. Do not run a
-separate npm start/dev process on the server.
-
-## 5. Check locally before starting a tunnel
+Import into the empty target **before starting the API**:
 
 ```bash
-curl -I http://127.0.0.1:8082/
-curl -I http://127.0.0.1:8082/userProfile
-curl -i http://127.0.0.1:8082/api/hf/user
+sudo docker compose run --rm --user "$(id -u):$(id -g)" -v "$PWD/backups/postgresql:/data:ro" migrate node scripts/import-backups.cjs /data/data.json
 ```
 
-Expect HTTP 200 for the first two requests. The API request should return
-HTTP 403 without a token, proving the proxy reaches authentication middleware.
-A 502 indicates an API/upstream problem; inspect logs before continuing.
-SERVER_IP:8082 is intentionally unavailable because the port binds to localhost.
+See BACKUP-IMPORT.md for SCP and file permissions. Verify totals: 6 users, 13 posts,
+3 comments, 12 reactions, 2 follows. The importer is transactional and refuses
+nonempty tables. Imported users log in again: password hashes are preserved and
+refresh tokens are cleared.
 
-## 6. Test public access
-
-```bash
-cloudflared tunnel --url http://127.0.0.1:8082
-```
-
-Open the printed https://...trycloudflare.com URL. Test registration, login,
-post creation, image upload/display, profile editing, profile URL reload, and
-logout. Check from a phone on mobile data too. API/image URLs stay on the same
-origin, so Quick Tunnel hostname changes do not require frontend rebuilds.
-
-## 7. Run a separate background tunnel for this app
-
-Stop the manual tunnel with Ctrl+C. Leave your old website/tunnel alone.
-
-```bash
-command -v cloudflared
-sudo nano /etc/systemd/system/cloudflared-friendo.service
-```
-
-Paste the following. Change /usr/bin/cloudflared if command -v showed another path:
-
-```ini
-[Unit]
-Description=Cloudflare Quick Tunnel for Friendo
-Wants=network-online.target
-After=network-online.target docker.service
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/cloudflared tunnel --url http://127.0.0.1:8082
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable it and find the new URL:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now cloudflared-friendo.service
-sudo systemctl status cloudflared-friendo.service --no-pager
-sudo journalctl -u cloudflared-friendo.service -n 100 --no-pager
-```
-
-Use the URL in these logs: restarting a Quick Tunnel creates a new hostname.
-You can disconnect SSH. Compose containers use restart: unless-stopped.
-After reboot:
-
-```bash
-sudo docker compose ps
-sudo systemctl is-active cloudflared-friendo.service
-sudo journalctl -u cloudflared-friendo.service -b --no-pager | grep trycloudflare.com
-```
-
-Quick Tunnels have temporary URLs and no uptime guarantee, and are intended for
-testing/development. Use a named Cloudflare Tunnel and your own domain for a
-stable deployment. Its service target is also http://127.0.0.1:8082 when
-cloudflared runs on Ubuntu itself. If cloudflared runs in a container, localhost
-means that container; use a shared Docker network/service address instead.
-
-## 8. Updates, logs, and data
-
-Pull both repositories, keeping the existing .env and Compose project:
-
-```bash
-git -C ../proiect-de-curs-frontend pull --ff-only origin master
-git pull --ff-only origin master
-```
-
-Then rebuild:
-
-```bash
-sudo docker compose up -d --build
-sudo docker compose restart frontend
-sudo docker compose ps
-sudo docker compose logs --tail=100 api frontend
-```
-
-Restarting frontend ensures Nginx resolves the API's current container IP.
-To stop without deleting persistent data:
-
-```bash
-sudo docker compose down
-sudo systemctl stop cloudflared-friendo.service
-```
-
-Start again with:
+## 7. Start, verify and expose
 
 ```bash
 sudo docker compose up -d
-sudo systemctl start cloudflared-friendo.service
+sudo docker compose ps -a
+sudo docker compose logs --tail=100 postgres migrate api frontend
+curl -I http://127.0.0.1:8082/
+curl -i http://127.0.0.1:8082/api/hf/user
 ```
 
-MongoDB data persists in mongodb_data and uploads in uploads_data. Never use
-`docker compose down -v` unless you intend to delete those volumes. Back up
-both the database and uploads and keep an off-server copy; volumes are not backups.
+Expect frontend HTTP 200 and unauthenticated API HTTP 403. The one-shot `migrate`
+service should exit 0; the API waits for success. A failed migration prevents API
+startup. For subsequent schema updates, explicitly run the migration service before
+starting the updated API.
 
-MongoDB initialization creates a database-scoped readWrite user only when the
-volume is empty. Editing .env passwords later does not change existing MongoDB
-accounts. Preserve existing credentials during updates.
+Point your existing Cloudflare Tunnel to `http://127.0.0.1:8082`. No router port
+forwarding or public PostgreSQL port is needed. Keep unrelated sites/tunnels intact.
+Verify login, session refresh, feed/search, profiles, post create/edit/delete,
+reactions, comments, upload/view/delete images and logout. Restart the stack and
+confirm posts and uploads persist.
 
-## Verification before handoff
+## Backups and rollback
 
-TypeScript and the Vite build passed. All 11 frontend tests and 10 API tests
-passed, using isolated temporary MongoDB 7.0.24. A browser exercised the built
-frontend with the real API/database: registration, login, image posts, reactions,
-comments, profile/avatar editing, direct links, reload/session restoration, and
-logout. Both final dependency audits reported zero known vulnerabilities.
-
-Reproduce on a development machine with compatible Node:
+Back up PostgreSQL and the uploads volume regularly. From the backend directory:
 
 ```bash
+sudo docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > friendo.dump
+```
+
+Store backups privately and test restoring into a separate database. Keep the old
+MongoDB volume and release through cutover. For rollback, stop new writes and restore
+the matching old backend/frontend/configuration. PostgreSQL-only writes require
+reconciliation; reverting code does not migrate those writes back.
+
+## Local verification
+
+```bash
+npm ci
+npm test
+npm run test:backup
+npm run test:backup:integration
 cd ../proiect-de-curs-frontend
 npm ci
 npm test
 npm run build
-cd ../proiect-de-curs-backend
-npm ci
-npm test
 ```
 
-The backend tests download a MongoDB executable on first run and never connect
-to the deployment database. Running tests is not required to start production.
-Docker is unavailable on the verification machine, so image builds, MongoDB
-Compose initialization, volume permissions/persistence, the actual tunnel, and
-reboot behavior still need checking on Ubuntu. See the frontend README for
-existing incomplete features and the non-blocking JS bundle size warning.
-
-## Official references
-
-- [Docker and Compose on Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
-- [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
-- [Vite environment variables](https://vite.dev/guide/env-and-mode)
+Tests use isolated temporary PostgreSQL clusters, never the deployment database.
+Run as a regular user: PostgreSQL refuses initialization as root. Docker image builds,
+Compose startup and public routing still require verification on Ubuntu because
+Docker is unavailable on the development machine used for this migration.

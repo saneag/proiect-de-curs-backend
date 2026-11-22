@@ -11,7 +11,9 @@ import postRoutes from './routes/postRoutes';
 const app = express();
 dotenv.config();
 
-app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000' }));
+app.use(
+    cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000' })
+);
 app.use(express.json({ limit: '1mb' }));
 app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -23,13 +25,23 @@ app.use('/api/hf', userRoutes, postRoutes);
 const start = async () => {
     for (const secretName of ['JWTSECRET', 'JWTREFRESHSECRET']) {
         if ((process.env[secretName] || '').length < 32) {
-            throw new Error(`${secretName} must be set to a random value of at least 32 characters`);
+            throw new Error(
+                `${secretName} must be set to a random value of at least 32 characters`
+            );
         }
     }
 
     await Database.connect();
     const port = Number(process.env.PORT || 5000);
-    app.listen(port, () => console.log(`Server running on port ${port}`));
+    const server = app.listen(port, () =>
+        console.log(`Server running on port ${port}`)
+    );
+    const shutdown = () =>
+        server.close(() => {
+            void Database.disconnect().then(() => process.exit(0));
+        });
+    process.once('SIGTERM', shutdown);
+    process.once('SIGINT', shutdown);
 };
 
 start().catch((error) => {

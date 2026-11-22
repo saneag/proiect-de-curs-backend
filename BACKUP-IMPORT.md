@@ -1,9 +1,8 @@
 # Import the SocialMediaApp backups into PostgreSQL
 
-The backup package is ready for a **new, empty PostgreSQL database**. The current
-Express application still uses MongoDB: importing these records does not switch the
-application to PostgreSQL. Complete the separately planned Prisma/API migration
-before pointing application traffic at this database. No server has been changed.
+The backup package targets a **new, empty PostgreSQL database** using the same Prisma
+schema as the application. The API now uses PostgreSQL. No server has been changed.
+Follow DEPLOYMENT.md for Docker deployment, then use the import command below.
 
 ## Included locally
 
@@ -28,11 +27,25 @@ data and password hashes. Transfer the converted file privately; a Git pull alon
 will **not** download it. Image files are not in these JSON backups: transfer the
 existing uploads separately, preserving their paths.
 
-## Ubuntu: prepare the database
+## Docker import (recommended for the server)
+
+Follow steps 5–7 in DEPLOYMENT.md. Configure `.env`, build the images, start PostgreSQL,
+and run the migration service. Transfer the converted file using the SCP example below,
+then import before starting the API:
+
+```bash
+sudo docker compose run --rm --user "$(id -u):$(id -g)" -v "$PWD/backups/postgresql:/data:ro" migrate node scripts/import-backups.cjs /data/data.json
+```
+
+The import command runs as your SSH user's UID/GID so it can read your private
+uploaded file even with mode 600. The mount is read-only; no public permissions
+or root user are needed inside the container.
+
+## Alternative: Ubuntu with host-installed PostgreSQL
 
 Use Node.js 24 LTS (or a Prisma-compatible Node.js 22 release, at least 22.12) and
 PostgreSQL 16 or newer. These commands assume a host-installed PostgreSQL instance;
-the existing MongoDB Compose stack is unchanged.
+the Docker stack instead uses its private `postgres` service hostname.
 
 ```bash
 sudo apt update

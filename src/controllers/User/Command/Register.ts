@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 
-import User from '../../../models/User';
+import { prisma } from '../../../db';
 
 import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 import { UserBuilder } from '../Builder/UserBuilder';
@@ -21,11 +21,9 @@ export class Register implements ICommand {
                 .setPasswordHash(passwordHash)
                 .setAvatarUrl(req.body.avatarUrl);
 
-            const user = new User({
-                ...userBuilder.build(),
+            const user = await prisma.user.create({
+                data: userBuilder.build(),
             });
-
-            await user.save();
             res.status(201).json(UserDestructuring(user));
         } catch (error) {
             console.error(error as Error);

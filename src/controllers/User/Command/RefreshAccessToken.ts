@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 
-import User from '../../../models/User';
+import { prisma } from '../../../db';
 
 import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 import { IDecodedJwt } from '../../../interfaces/IUser/IDecodedJwt';
@@ -22,9 +22,9 @@ export class RefreshAccessToken implements ICommand {
                 process.env.JWTREFRESHSECRET as string
             ) as IDecodedJwt;
 
-            const user = await User.findOne({
-                _id: decoded.userId,
-            }).select('+refreshToken').lean();
+            const user = await prisma.user.findUnique({
+                where: { id: decoded.userId },
+            });
 
             if (!user) {
                 res.status(401).json({
@@ -40,7 +40,7 @@ export class RefreshAccessToken implements ICommand {
             }
 
             const accessToken = jwt.sign(
-                { userId: user._id },
+                { userId: user.id },
                 process.env.JWTSECRET as string,
                 {
                     expiresIn: '1h',
@@ -53,7 +53,9 @@ export class RefreshAccessToken implements ICommand {
             });
         } catch (error) {
             if (error instanceof jwt.JsonWebTokenError) {
-                res.status(401).json({ message: 'Invalid or expired refresh token' });
+                res.status(401).json({
+                    message: 'Invalid or expired refresh token',
+                });
                 return;
             }
             console.error(error as Error);

@@ -1,31 +1,17 @@
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
+import 'dotenv/config';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '../generated/prisma/client';
 
-dotenv.config();
-
-class Database {
-    private static _instance: Database;
-    private constructor() {}
-
-    public async connect(): Promise<void> {
-        const mongoUri = process.env.MONGOURI;
-        if (!mongoUri) throw new Error('MONGOURI is required');
-        await mongoose.connect(mongoUri);
-        console.log('Connected to Database');
-    }
-
-    public static getInstance(): Database {
-        if (this._instance) {
-            return this._instance;
-        }
-
-        this._instance = new Database();
-        return this._instance;
-    }
-
-    public getConnection(): mongoose.Connection {
-        return mongoose.connection;
-    }
-}
-
-export default Database.getInstance();
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error('DATABASE_URL is required');
+export const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString, connectionTimeoutMillis: 10000 }),
+});
+export default {
+    async connect(): Promise<void> {
+        await prisma.$connect();
+        await prisma.$queryRaw`SELECT 1`;
+        console.log('Connected to PostgreSQL');
+    },
+    disconnect: () => prisma.$disconnect(),
+};

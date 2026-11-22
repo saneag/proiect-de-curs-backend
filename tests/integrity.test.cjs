@@ -5,9 +5,15 @@ const { once } = require('node:events');
 const net = require('node:net');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
-const { MongoMemoryServer } = require('mongodb-memory-server-core');
+const fs = require('node:fs');
+const os = require('node:os');
+const { execFileSync } = require('node:child_process');
+const { PrismaClient } = require('../build/generated/prisma/client.js');
+const { PrismaPg } = require('@prisma/adapter-pg');
 
-let mongo;
+let postgres;
+let databaseDir;
+let prisma;
 let server;
 let origin;
 let tokens;
@@ -34,7 +40,23 @@ async function request(method, route, body, accessToken) {
 
 before(async () => {
     // A fresh temporary database; this never connects to the deployment database.
-    mongo = await MongoMemoryServer.create({ binary: { version: '7.0.24' } });
+    const { default: EmbeddedPostgres } = await import('embedded-postgres');
+    const dbSocket = net.createServer();
+    dbSocket.listen(0, '127.0.0.1');
+    await once(dbSocket, 'listening');
+    const dbPort = dbSocket.address().port;
+    await new Promise(resolve => dbSocket.close(resolve));
+    databaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'social-api-test-'));
+    postgres = new EmbeddedPostgres({ databaseDir,
+        user: 'postgres', password: 'test-only-password', port: dbPort, persistent: true,
+        autoRehydrateSymlinks: true, initdbFlags: ['--encoding=UTF8', '--locale=C'], onLog() {}, onError() {} });
+    await postgres.initialise();
+    await postgres.start();
+    await postgres.createDatabase('integrity');
+    const databaseUrl = `postgresql://postgres:test-only-password@127.0.0.1:${dbPort}/integrity`;
+    execFileSync(process.execPath, [require.resolve('prisma/build/index.js'), 'migrate', 'deploy'],
+        { env: { ...process.env, DATABASE_URL: databaseUrl }, stdio: 'pipe' });
+    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
     const socket = net.createServer();
     socket.listen(0, '127.0.0.1');
     await once(socket, 'listening');
@@ -46,7 +68,7 @@ before(async () => {
         env: {
             ...process.env,
             PORT: String(port),
-            MONGOURI: mongo.getUri('integrity'),
+            DATABASE_URL: databaseUrl,
             JWTSECRET: randomBytes(32).toString('hex'),
             JWTREFRESHSECRET: randomBytes(32).toString('hex'),
             FRONTEND_ORIGIN: origin,
@@ -72,7 +94,12 @@ after(async () => {
         server.kill();
         await stopped;
     }
-    if (mongo) await mongo.stop();
+    if (prisma) await prisma.$disconnect();
+    if (postgres) await postgres.stop();
+    if (databaseDir) {
+        assert.equal(path.dirname(path.resolve(databaseDir)), path.resolve(os.tmpdir()));
+        fs.rmSync(databaseDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    }
 });
 
 test('API rejects unauthenticated access', async () => {
@@ -85,6 +112,8 @@ test('registration validates passwords and rejects duplicate accounts', async ()
     const created = await request('POST', '/user/register', alice);
     assert.equal(created.status, 201);
     assert.equal(created.data.passwordHash, undefined);
+    assert.equal(typeof created.data.id, 'string');
+    assert.equal(created.data._id, undefined);
     assert.equal((await request('POST', '/user/register', alice)).status, 409);
     assert.equal((await request('POST', '/user/register', bob)).status, 201);
 });
@@ -117,7 +146,10 @@ test('post creation, listing, and literal search work', async () => {
     assert.equal(list.data.totalPostsNumber, 1);
     assert.equal(list.data.posts[0].title, 'Integrity post');
     assert.match(list.data.posts[0].content, /world/);
-    postId = list.data.posts[0]._id;
+    postId = list.data.posts[0].id;
+    assert.equal(typeof postId, 'string');
+    assert.equal(list.data.posts[0]._id, undefined);
+    assert(!JSON.stringify(list.data).includes('passwordHash'));
     const search = await request('GET', '/get-posts?search=' + encodeURIComponent('.*'), null, tokens.accessToken);
     assert.equal(search.data.totalPostsNumber, 0);
 });
@@ -168,9 +200,71 @@ test('post images upload and can be attached and removed', async () => {
     assert.equal((await request('DELETE', '/post/postImage/' + upload.data.url.split('/').pop(), null, tokens.accessToken)).status, 200);
 });
 
+test('feed pagination, case-insensitive filters and SQL wildcards are literal', async () => {
+    const special = "Literal %_ quote ' test";
+    assert.equal((await request('POST', '/create-post', { title: special, content: '<p>Search content</p>' }, tokens.accessToken)).status, 201);
+    for (const search of ['%_', "quote '", 'LITERAL']) {
+        const result = await request('GET', '/get-posts?search=' + encodeURIComponent(search), null, tokens.accessToken);
+        assert.equal(result.status, 200);
+        assert.equal(result.data.totalPostsNumber, 1);
+        assert.equal(result.data.posts[0].title, special);
+    }
+    const creator = await request('GET', '/get-posts?search=ALICE&email=ALICE%40EXAMPLE.COM', null, tokens.accessToken);
+    assert.equal(creator.status, 200);
+    assert.equal(creator.data.totalPostsNumber, 3);
+    const first = (await request('GET', '/get-posts?limit=1&page=1', null, tokens.accessToken)).data;
+    const second = (await request('GET', '/get-posts?limit=1&page=2', null, tokens.accessToken)).data;
+    assert.equal(first.posts.length, 1);
+    assert.equal(second.posts.length, 1);
+    assert.notEqual(first.posts[0].id, second.posts[0].id);
+    assert.equal(first.totalPostsNumber, 3);
+    assert(new Date(first.posts[0].createdAt) >= new Date(second.posts[0].createdAt));
+    const clamped = await request('GET', '/get-posts?limit=-1&page=0', null, tokens.accessToken);
+    assert.equal(clamped.data.posts.length, 1);
+    assert.equal((await request('GET', '/get-posts?email=%25', null, tokens.accessToken)).data.totalPostsNumber, 0);
+});
+
+test('validation and missing resources return errors without writing records', async () => {
+    assert.equal((await request('POST', '/create-post', { title: 'x', content: 'hello' }, tokens.accessToken)).status, 400);
+    assert.equal((await request('PATCH', `/update-post/${postId}`, { title: 'x' }, tokens.accessToken)).status, 400);
+    assert.equal((await request('PATCH', `/react-to-post/${postId}/comment`, { content: '' }, tokens.accessToken)).status, 400);
+    assert.equal((await request('PATCH', `/react-to-post/missing/like`, {}, tokens.accessToken)).status, 404);
+    assert.equal((await request('GET', '/get-post/missing', null, tokens.accessToken)).status, 404);
+    assert.equal((await request('PATCH', '/user/updateUser', { firstName: '!' }, tokens.accessToken)).status, 400);
+});
+
+test('reaction switching, toggling and concurrent requests preserve one reaction per user', async () => {
+    const react = type => request('PATCH', `/react-to-post/${postId}/${type}`, {}, tokens.accessToken);
+    const read = async () => (await request('GET', `/get-post/${postId}`, null, tokens.accessToken)).data.post;
+    assert.equal((await react('dislike')).status, 200);
+    assert.equal((await read()).numberOfLikes, 0);
+    assert.equal((await read()).numberOfDislikes, 1);
+    await react('dislike');
+    assert.equal((await read()).numberOfDislikes, 0);
+    await react('like');
+    const results = await Promise.all(Array.from({ length: 8 }, () => react('like')));
+    assert(results.every(result => result.status === 200));
+    assert.equal((await read()).numberOfLikes, 1);
+    assert.equal(await prisma.reaction.count({ where: { postId } }), 1);
+});
+
+test('email changes retain post ownership, author snapshots and valid sessions', async () => {
+    assert.equal((await request('PATCH', '/user/updateUser', { email: 'changed@example.com' }, tokens.accessToken)).status, 200);
+    assert.equal((await request('GET', '/user', null, tokens.accessToken)).data.email, 'changed@example.com');
+    assert.equal((await request('GET', '/user/changed@example.com')).status, 200);
+    assert.equal((await request('PATCH', `/update-post/${postId}`, { title: 'After email change' }, tokens.accessToken)).status, 200);
+    const post = (await request('GET', `/get-post/${postId}`, null, tokens.accessToken)).data.post;
+    assert.equal(post.creator.email, alice.email);
+    assert.equal(post.reactions[0].email, 'changed@example.com');
+    const users = (await request('GET', '/users')).data.users;
+    assert(users.every(user => typeof user.id === 'string' && !user.passwordHash && !user.refreshToken));
+});
+
 test('delete removes a post and logout revokes the refresh token', async () => {
     assert.equal((await request('DELETE', `/delete-post/${postId}`, null, tokens.accessToken)).status, 200);
     assert.equal((await request('GET', `/get-post/${postId}`, null, tokens.accessToken)).status, 404);
+    assert.equal(await prisma.comment.count({ where: { postId } }), 0);
+    assert.equal(await prisma.reaction.count({ where: { postId } }), 0);
     assert.equal((await request('POST', '/user/logout', { refreshToken: tokens.refreshToken })).status, 200);
     assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: tokens.refreshToken })).status, 401);
 });

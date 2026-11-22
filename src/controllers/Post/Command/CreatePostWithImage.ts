@@ -1,17 +1,20 @@
 import { Request, Response } from 'express';
 
-import User from '../../../models/User';
-import Post from '../../../models/Post';
+import { prisma } from '../../../db';
 
 import { ICommand } from '../../../interfaces/IPost/Command/ICommand';
 
 import { PostDecorator } from '../Decorator/PostDecorator';
 import { PostBuilder } from '../Builder/PostBuilder';
+import { validPost } from '../../../utils/validation';
+import { snapshot } from '../../../utils/postResponse';
 
 export class CreatePostWithImage implements ICommand {
     public async execute(req: Request, res: Response): Promise<void> {
         try {
-            const user = await User.findById(req.params.userId).lean();
+            const user = await prisma.user.findUnique({
+                where: { id: req.params.userId },
+            });
 
             if (!user) {
                 res.status(401).json({
@@ -32,16 +35,31 @@ export class CreatePostWithImage implements ICommand {
             const postDecorator = new PostDecorator();
             const formattedText = postDecorator.decorateText(content);
 
+            if (
+                !validPost({
+                    title,
+                    content: formattedText,
+                    image: req.body.image,
+                })
+            ) {
+                res.status(400).json({ message: 'Invalid post fields.' });
+                return;
+            }
             const postBuilder = new PostBuilder();
 
             const post = postBuilder
                 .setCreator(user)
-                .setTitle(title)
+                .setTitle(title.trim())
                 .setContent(formattedText)
                 .setImage(image);
 
-            await Post.create({
-                ...post.buildPostWithImages(),
+            const { creator, ...data } = post.buildPostWithImages();
+            await prisma.post.create({
+                data: {
+                    ...data,
+                    creatorId: user.id,
+                    creatorSnapshot: snapshot(creator),
+                },
             });
 
             res.status(201).json({

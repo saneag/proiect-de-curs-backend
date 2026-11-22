@@ -6,8 +6,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "strict": true,
-    "rootDir": "generated",
-    "outDir": ".prisma-build"
+    "rootDir": "src/generated",
+    "outDir": "build/generated"
   },
-  "include": ["generated/**/*.ts"]
+  "include": [
+    "src/generated/**/*.ts"
+  ]
 }

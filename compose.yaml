@@ -1,48 +1,45 @@
 services:
-  mongodb:
-    image: mongo:7.0
+  postgres:
+    image: postgres:17-bookworm
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?Set MONGO_ROOT_USER in .env}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
-      MONGO_APP_USER: ${MONGO_APP_USER:?Set MONGO_APP_USER in .env}
-      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?Set MONGO_APP_PASSWORD in .env}
-      MONGO_APP_DATABASE: ${MONGO_APP_DATABASE:-friendo}
+      POSTGRES_USER: ${POSTGRES_USER:-friendo_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-friendo}
     volumes:
-      - mongodb_data:/data/db
-      - ./mongo-init:/docker-entrypoint-initdb.d:ro
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test:
-        [
-          "CMD",
-          "mongosh",
-          "--quiet",
-          "--username",
-          "${MONGO_ROOT_USER}",
-          "--password",
-          "${MONGO_ROOT_PASSWORD}",
-          "--authenticationDatabase",
-          "admin",
-          "--eval",
-          "db.adminCommand('ping').ok",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
 
+  migrate:
+    build:
+      context: .
+      target: migration
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env using postgres as the database hostname}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   api:
-    build: .
+    build:
+      context: .
+      target: runtime
     restart: unless-stopped
     environment:
       PORT: 5000
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8082}
       JWTSECRET: ${JWTSECRET:?Set JWTSECRET in .env}
       JWTREFRESHSECRET: ${JWTREFRESHSECRET:?Set JWTREFRESHSECRET in .env}
-      MONGOURI: mongodb://${MONGO_APP_USER}:${MONGO_APP_PASSWORD}@mongodb:27017/${MONGO_APP_DATABASE:-friendo}?authSource=${MONGO_APP_DATABASE:-friendo}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
     depends_on:
-      mongodb:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - uploads_data:/app/build/uploads
 
@@ -58,5 +55,5 @@ services:
       - api
 
 volumes:
-  mongodb_data:
+  postgres_data:
   uploads_data:

@@ -1,9 +1,9 @@
-import mongoose from 'mongoose';
 import { ISimpleUser } from '../IUser/IUser';
 
-export interface IComment extends mongoose.Document {
+export interface IComment {
     postId: string;
-    userId: string;
+    id: string;
+    creatorId: string;
     content: string;
     creator: ISimpleUser;
     createdAt: Date;
