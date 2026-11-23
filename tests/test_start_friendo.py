@@ -54,11 +54,32 @@ class PortTests(unittest.TestCase):
                 patch.object(launcher.subprocess, 'run') as run, \
                 patch('builtins.print'):
             launcher.main()
+            commands = [call.args[0] for call in run.call_args_list]
+            self.assertLess(
+                commands.index(['docker', 'compose', 'build', 'migrate', 'api', 'frontend']),
+                commands.index(['docker', 'compose', 'stop', 'frontend', 'api']),
+            )
             select.assert_called_once_with(5000, {5000})
             up = next(call for call in run.call_args_list if call.args[0] == ['docker', 'compose', 'up', '-d'])
             self.assertEqual(up.kwargs['env']['FRONTEND_PORT'], '5001')
             self.assertEqual(up.kwargs['env']['BACKEND_PORT'], '5002')
             tunnel.assert_called_once_with(5001)
+
+    def test_failed_build_keeps_running_application_and_tunnel_untouched(self):
+        build = ['docker', 'compose', 'build', 'migrate', 'api', 'frontend']
+        with patch.object(launcher.sys, 'argv', ['start-friendo.py']), \
+                patch.object(launcher.Path, 'is_file', return_value=True), \
+                patch.object(launcher.os, 'chdir'), \
+                patch.object(launcher, 'start_tunnel') as tunnel, \
+                patch.object(launcher.subprocess, 'run', side_effect=[
+                    None, launcher.subprocess.CalledProcessError(1, build),
+                ]) as run:
+            with self.assertRaises(launcher.subprocess.CalledProcessError):
+                launcher.main()
+            self.assertEqual([call.args[0] for call in run.call_args_list], [
+                ['docker', 'compose', 'config', '--quiet'], build,
+            ])
+            tunnel.assert_not_called()
 
     def test_tunnel_uses_selected_frontend_port_and_a_separate_service(self):
         with patch.object(launcher.shutil, 'which', return_value='/usr/bin/cloudflared'), \

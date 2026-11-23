@@ -37,10 +37,12 @@ behavior remain the same. Run Compose commands from the backend checkout:
 
 ```bash
 sudo docker compose config --quiet
-sudo docker compose build migrate api frontend
-sudo docker compose run --rm migrate
 ~/bin/start-friendo
 ```
+
+The launcher rebuilds migration/API/frontend images before stopping the running
+app. Compose then applies committed migrations before starting the updated API.
+A failed build leaves the existing app and tunnel running.
 
 ## Development devices
 

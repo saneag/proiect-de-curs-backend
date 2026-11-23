@@ -185,7 +185,7 @@ cd ~/proiect-de-curs/proiect-de-curs-backend
 bash scripts/start-friendo.sh
 ```
 
-The launcher starts Docker, checks configuration, selects available paired ports starting at **5000/5001**, and starts Compose in the background. It stops this project's frontend/API while selecting ports. It does not import data or rebuild images. The API waits for the migration service to succeed. Use the printed URLs if the preferred pair was occupied.
+The launcher starts Docker, checks configuration, rebuilds the migration/API/frontend images, selects available paired ports starting at **5000/5001**, and starts Compose in the background. Building happens before it stops this project's frontend/API, so a failed build leaves the running app untouched. It does not import data. The API waits for the migration service to succeed. Use the printed URLs if the preferred pair was occupied.
 
 Both published ports bind to `127.0.0.1` on the server. Access the frontend through a reverse proxy, Cloudflare Tunnel, or SSH forwarding. From your computer:
 
@@ -239,7 +239,7 @@ Use the launcher's printed ports if different. Expect frontend HTTP 200, API HTT
 
 Data lives in `postgres_data` and uploaded images in `uploads_data`. Back up both. Stop the application with `sudo docker compose stop`; stop its managed tunnel separately with `sudo systemctl stop friendo-tunnel`.
 
-For updates: back up and stop writes, pull matching releases of both repositories, rebuild all three images, explicitly run `sudo docker compose run --rm migrate`, then run the launcher. Do not reimport backups into an existing database. Keep the Compose project name stable so the same volumes are used.
+For updates: back up, pull matching releases of both repositories, then run the launcher. It rebuilds all three images before stopping the app; Compose runs the migration service before starting the API. Do not reimport backups into an existing database. Keep the Compose project name stable so the same volumes are used.
 
 ## Data migration and backups
 

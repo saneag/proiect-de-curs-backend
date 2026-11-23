@@ -108,8 +108,9 @@ def main():
     if not (ROOT / '.env').is_file():
         raise RuntimeError('Configure the backend .env before starting Friendo')
     os.chdir(ROOT)
-    # Validate configuration before stopping the current application.
+    # Validate and build before stopping the current application.
     subprocess.run(['docker', 'compose', 'config', '--quiet'], check=True)
+    subprocess.run(['docker', 'compose', 'build', 'migrate', 'api', 'frontend'], check=True)
     subprocess.run(['docker', 'compose', 'stop', 'frontend', 'api'], check=True)
     frontend, backend = find_pair(args.base, docker_reserved_ports())
     env = {**os.environ, 'FRONTEND_PORT': str(frontend), 'BACKEND_PORT': str(backend)}

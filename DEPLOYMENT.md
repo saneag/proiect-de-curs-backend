@@ -78,8 +78,8 @@ curl -i http://127.0.0.1:5001/api/hf/user
 
 Expect frontend HTTP 200 and unauthenticated API HTTP 403. The one-shot `migrate`
 service should exit 0; the API waits for success. A failed migration prevents API
-startup. For subsequent schema updates, explicitly run the migration service before
-starting the updated API.
+startup. On subsequent starts, the launcher rebuilds all images before stopping
+the running app; Compose runs migrations before starting the updated API.
 
 The launcher prefers 5000/5001, then 5001/5002, 5002/5003, etc. It stops only the
 current project's frontend/API before checking socket availability and Docker port
