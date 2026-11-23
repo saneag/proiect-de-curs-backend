@@ -121,6 +121,10 @@ Use the Docker workflow below for server deployments and persistent uploads. The
 
 ## Deploy on an Ubuntu server
 
+For standalone Ubuntu PostgreSQL shared across development devices, follow
+[the host PostgreSQL setup and migration guide](HOST-POSTGRES.md). It preserves
+the existing Docker database for rollback and keeps uploaded images in place.
+
 ### 1. Prepare the server and repositories
 
 Install Docker Engine with the Compose plugin, Git, Python 3, and `flock` from util-linux. The launcher also uses systemd and sudo. Docker provides Node.js inside the images; no host Node.js installation is required. Install `cloudflared` if you want the launcher's temporary public tunnel.
