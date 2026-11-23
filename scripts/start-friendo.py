@@ -4,10 +4,12 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import shutil
 import subprocess
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parent.parent
 TUNNEL_UNIT = 'friendo-tunnel.service'
@@ -44,6 +46,29 @@ def docker_reserved_ports():
             for binding in (bindings or []) if binding.get('HostPort')}
 
 
+def wait_tunnel_url(timeout=30):
+    deadline = time.monotonic() + timeout
+    try:
+        # Read only this service invocation, never URLs from earlier launches.
+        invocation = subprocess.check_output([
+            'systemctl', 'show', TUNNEL_UNIT, '--property=InvocationID', '--value',
+        ], text=True, timeout=3).strip()
+        if not re.fullmatch(r'[0-9a-f]{32}', invocation):
+            return None
+        while time.monotonic() < deadline:
+            logs = subprocess.check_output([
+                'journalctl', '-b', '--no-pager', '-o', 'cat',
+                '_SYSTEMD_INVOCATION_ID=' + invocation,
+            ], text=True, timeout=max(0.1, min(3, deadline - time.monotonic())))
+            urls = re.findall(r'https://[a-z0-9-]+\.trycloudflare\.com\b', logs)
+            if urls:
+                return urls[-1]
+            time.sleep(max(0, min(1, deadline - time.monotonic())))
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return None
+
+
 def start_tunnel(frontend):
     cloudflared = shutil.which('cloudflared')
     if not cloudflared:
@@ -63,6 +88,12 @@ def start_tunnel(frontend):
         print('App is running, but its Cloudflare tunnel could not start. Check systemd logs.', file=sys.stderr)
         return
     print('Public tunnel started in the background. Its temporary URL may change after restart.')
+    print('Waiting up to 30 seconds for the public URL...', flush=True)
+    url = wait_tunnel_url()
+    if url:
+        print(f'Public website: {url}', flush=True)
+        return
+    print('The public URL is not available yet. Check the tunnel logs for connection errors.', file=sys.stderr)
     print('Find the public URL: sudo journalctl -u friendo-tunnel -b --no-pager -o cat | '
           "grep -oE 'https://[a-z0-9-]+\\.trycloudflare\\.com' | tail -1")
 

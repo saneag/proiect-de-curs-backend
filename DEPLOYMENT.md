@@ -171,7 +171,11 @@ failure. On each Ubuntu boot, the enabled `friendo.service` creates it again. No
 change to the existing Friendo boot unit is needed: pull the updated code.
 
 After pulling, run `~/bin/start-friendo` or `sudo systemctl restart friendo`.
-Find the public URL (retry after a few seconds if the tunnel is still connecting):
+The launcher waits up to 30 seconds and prints `Public website: https://...trycloudflare.com`
+using logs from the current tunnel invocation. During systemd startup, this output is
+recorded in `sudo journalctl -u friendo -b --no-pager`. If URL discovery times out or
+logs cannot be read, the app remains running and the launcher prints a fallback command.
+Find the public URL manually (retry after a few seconds if the tunnel is still connecting):
 
 ```bash
 sudo journalctl -u friendo-tunnel -b --no-pager -o cat | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1

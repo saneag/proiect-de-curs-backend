@@ -191,7 +191,7 @@ ssh -L 5000:127.0.0.1:5000 USER@SERVER
 
 Open `http://localhost:5000`. If the launcher selected a different frontend port, substitute it in the destination part of the SSH command.
 
-If `cloudflared` is installed, the launcher also starts a temporary public tunnel in `friendo-tunnel.service`, which survives SSH logout. Retrieve its URL with:
+If `cloudflared` is installed, the launcher also starts a temporary public tunnel in `friendo-tunnel.service`, which survives SSH logout. It waits up to 30 seconds for the current launch's URL and prints `Public website: https://...trycloudflare.com` automatically. If the URL is delayed, the app keeps running and the launcher prints a log-check command. Retrieve the URL manually with:
 
 ```bash
 sudo journalctl -u friendo-tunnel -b --no-pager -o cat | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1

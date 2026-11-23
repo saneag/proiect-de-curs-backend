@@ -63,8 +63,10 @@ class PortTests(unittest.TestCase):
     def test_tunnel_uses_selected_frontend_port_and_a_separate_service(self):
         with patch.object(launcher.shutil, 'which', return_value='/usr/bin/cloudflared'), \
                 patch.object(launcher.subprocess, 'run') as run, \
-                patch('builtins.print'):
+                patch.object(launcher, 'wait_tunnel_url', return_value='https://new-tunnel.trycloudflare.com'), \
+                patch('builtins.print') as output:
             launcher.start_tunnel(5003)
+            output.assert_any_call('Public website: https://new-tunnel.trycloudflare.com', flush=True)
         self.assertEqual(run.call_args_list[0].args[0], ['systemctl', 'stop', 'friendo-tunnel.service'])
         command = run.call_args_list[1].args[0]
         self.assertEqual(command[0], 'systemd-run')
@@ -78,6 +80,34 @@ class PortTests(unittest.TestCase):
                 patch('builtins.print'):
             launcher.start_tunnel(5000)
             run.assert_not_called()
+
+    def test_waits_for_url_from_current_invocation(self):
+        invocation = 'a' * 32
+        with patch.object(launcher.subprocess, 'check_output', side_effect=[
+                invocation + '\n', 'Connecting...',
+                'Visit https://new-tunnel.trycloudflare.com to access your tunnel',
+        ]) as read, patch.object(launcher.time, 'sleep'):
+            self.assertEqual(launcher.wait_tunnel_url(), 'https://new-tunnel.trycloudflare.com')
+        self.assertIn('_SYSTEMD_INVOCATION_ID=' + invocation, read.call_args.args[0])
+
+    def test_does_not_read_old_logs_when_invocation_is_missing(self):
+        with patch.object(launcher.subprocess, 'check_output', return_value='') as read:
+            self.assertIsNone(launcher.wait_tunnel_url())
+            self.assertEqual(read.call_count, 1)
+
+    def test_url_wait_has_a_deadline(self):
+        with patch.object(launcher.subprocess, 'check_output', return_value='a' * 32) as read, \
+                patch.object(launcher.time, 'monotonic', side_effect=[0, 31]):
+            self.assertIsNone(launcher.wait_tunnel_url())
+            self.assertEqual(read.call_count, 1)
+
+    def test_journal_failure_keeps_app_running_and_prints_fallback(self):
+        with patch.object(launcher.shutil, 'which', return_value='/usr/bin/cloudflared'), \
+                patch.object(launcher.subprocess, 'run'), \
+                patch.object(launcher.subprocess, 'check_output', side_effect=OSError('journal unavailable')), \
+                patch('builtins.print') as output:
+            launcher.start_tunnel(5000)
+        self.assertTrue(any('Find the public URL:' in str(call) for call in output.call_args_list))
 
     def test_tunnel_start_failure_does_not_stop_app(self):
         with patch.object(launcher.shutil, 'which', return_value='/usr/bin/cloudflared'), \
