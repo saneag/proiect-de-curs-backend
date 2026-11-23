@@ -9,6 +9,8 @@ are in [Toggle Ctrl's home server guide](https://github.com/saneag/toggle-ctrl/b
 The one-time setup script lives in that repository as `scripts/setup-home-postgres.py`.
 It migrates existing PostgreSQL data rather than importing the historical MongoDB
 backups again.
+For a blank server, use [the beginner installation/recovery guide](https://github.com/saneag/toggle-ctrl/blob/main/deploy/SETUP-FROM-ZERO.md)
+and [daily command cheatsheet](https://github.com/saneag/toggle-ctrl/blob/main/deploy/COMMANDS-CHEATSHEET.md).
 
 ## Server configuration
 
