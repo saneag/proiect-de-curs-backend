@@ -239,7 +239,7 @@ Use the launcher's printed ports if different. Expect frontend HTTP 200, API HTT
 
 Data lives in `postgres_data` and uploaded images in `uploads_data`. Back up both. Stop the application with `sudo docker compose stop`; stop its managed tunnel separately with `sudo systemctl stop friendo-tunnel`.
 
-For updates: back up, pull matching releases of both repositories, then run the launcher. It rebuilds all three images before stopping the app; Compose runs the migration service before starting the API. Do not reimport backups into an existing database. Keep the Compose project name stable so the same volumes are used.
+For updates: back up, push your changes to GitHub, then run the launcher. It pulls both repositories' configured upstream branches with `git pull --ff-only`, then rebuilds all three images before stopping the app; Compose runs the migration service before starting the API. Tracked local changes or a failed pull/build leave the running app untouched. Git runs as each checkout's owner, including when the launcher uses sudo. Do not reimport backups into an existing database. Keep the Compose project name stable so the same volumes are used.
 
 ## Data migration and backups
 

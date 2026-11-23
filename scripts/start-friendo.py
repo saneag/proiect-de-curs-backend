@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import pwd
 import re
 import socket
 import shutil
@@ -13,6 +14,24 @@ import time
 
 ROOT = Path(__file__).resolve().parent.parent
 TUNNEL_UNIT = 'friendo-tunnel.service'
+
+
+def pull_sources():
+    repositories = [ROOT, ROOT.parent / 'proiect-de-curs-frontend']
+    commands = []
+    for repository in repositories:
+        command = ['git', '-C', str(repository)]
+        owner = repository.stat().st_uid
+        if os.geteuid() == 0 and owner != 0:
+            command = ['runuser', '-u', pwd.getpwuid(owner).pw_name, '--', *command]
+        dirty = subprocess.check_output(
+            [*command, 'status', '--porcelain', '--untracked-files=no'], text=True)
+        if dirty.strip():
+            raise RuntimeError(f'Commit or restore tracked local changes before deploying: {repository}')
+        commands.append(command)
+    for command in commands:
+        subprocess.run([*command, 'pull', '--ff-only'], check=True,
+                       env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'})
 
 
 def find_pair(start, reserved=()):
@@ -108,6 +127,7 @@ def main():
     if not (ROOT / '.env').is_file():
         raise RuntimeError('Configure the backend .env before starting Friendo')
     os.chdir(ROOT)
+    pull_sources()
     # Validate and build before stopping the current application.
     subprocess.run(['docker', 'compose', 'config', '--quiet'], check=True)
     subprocess.run(['docker', 'compose', 'build', 'migrate', 'api', 'frontend'], check=True)

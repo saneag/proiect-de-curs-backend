@@ -40,9 +40,10 @@ sudo docker compose config --quiet
 ~/bin/start-friendo
 ```
 
-The launcher rebuilds migration/API/frontend images before stopping the running
-app. Compose then applies committed migrations before starting the updated API.
-A failed build leaves the existing app and tunnel running.
+The launcher first pulls both repositories with `git pull --ff-only`, then
+rebuilds migration/API/frontend images before stopping the running app. Compose
+then applies committed migrations before starting the updated API. Tracked local
+changes or a failed pull/build leave the existing app and tunnel running.
 
 ## Development devices
 

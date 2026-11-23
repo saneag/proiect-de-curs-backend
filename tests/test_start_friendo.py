@@ -3,6 +3,7 @@ from pathlib import Path
 import socket
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 spec = importlib.util.spec_from_file_location('start_friendo', Path(__file__).resolve().parents[1] / 'scripts/start-friendo.py')
 launcher = importlib.util.module_from_spec(spec)
@@ -10,6 +11,37 @@ spec.loader.exec_module(launcher)
 
 
 class PortTests(unittest.TestCase):
+    def test_pulls_both_repositories_as_their_owner(self):
+        with patch.object(launcher.Path, 'stat', return_value=SimpleNamespace(st_uid=1000)), \
+                patch.object(launcher.os, 'geteuid', return_value=0), \
+                patch.object(launcher.pwd, 'getpwuid', return_value=SimpleNamespace(pw_name='alex')), \
+                patch.object(launcher.subprocess, 'check_output', side_effect=['', '']), \
+                patch.object(launcher.subprocess, 'run') as run:
+            launcher.pull_sources()
+            self.assertEqual([call.args[0] for call in run.call_args_list], [
+                ['runuser', '-u', 'alex', '--', 'git', '-C', str(repository), 'pull', '--ff-only']
+                for repository in [launcher.ROOT, launcher.ROOT.parent / 'proiect-de-curs-frontend']
+            ])
+
+    def test_dirty_frontend_prevents_pulling_either_repository(self):
+        with patch.object(launcher.Path, 'stat', return_value=SimpleNamespace(st_uid=1000)), \
+                patch.object(launcher.os, 'geteuid', return_value=1000), \
+                patch.object(launcher.subprocess, 'check_output', side_effect=['', ' M src/app.tsx']), \
+                patch.object(launcher.subprocess, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'tracked local changes'):
+                launcher.pull_sources()
+            run.assert_not_called()
+
+    def test_failed_pull_does_not_build_or_stop_the_app(self):
+        with patch.object(launcher.sys, 'argv', ['start-friendo.py']), \
+                patch.object(launcher.Path, 'is_file', return_value=True), \
+                patch.object(launcher.os, 'chdir'), \
+                patch.object(launcher, 'pull_sources', side_effect=RuntimeError('pull failed')), \
+                patch.object(launcher.subprocess, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'pull failed'):
+                launcher.main()
+            run.assert_not_called()
+
     def test_selects_preferred_free_pair(self):
         with patch.object(launcher.socket, 'socket'):
             self.assertEqual(launcher.find_pair(5000), (5000, 5001))
@@ -48,6 +80,7 @@ class PortTests(unittest.TestCase):
         with patch.object(launcher.sys, 'argv', ['start-friendo.py']), \
                 patch.object(launcher.Path, 'is_file', return_value=True), \
                 patch.object(launcher.os, 'chdir'), \
+                patch.object(launcher, 'pull_sources'), \
                 patch.object(launcher, 'docker_reserved_ports', return_value={5000}), \
                 patch.object(launcher, 'find_pair', return_value=(5001, 5002)) as select, \
                 patch.object(launcher, 'start_tunnel') as tunnel, \
@@ -70,6 +103,7 @@ class PortTests(unittest.TestCase):
         with patch.object(launcher.sys, 'argv', ['start-friendo.py']), \
                 patch.object(launcher.Path, 'is_file', return_value=True), \
                 patch.object(launcher.os, 'chdir'), \
+                patch.object(launcher, 'pull_sources'), \
                 patch.object(launcher, 'start_tunnel') as tunnel, \
                 patch.object(launcher.subprocess, 'run', side_effect=[
                     None, launcher.subprocess.CalledProcessError(1, build),
