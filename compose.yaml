@@ -27,6 +27,10 @@ services:
     restart: "no"
 
   api:
+    networks:
+      default:
+        aliases:
+          - friendo-api
     build:
       context: .
       target: runtime

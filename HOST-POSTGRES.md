@@ -26,6 +26,8 @@ The external `home-apps` Docker network must exist and PostgreSQL must permit it
 subnet for this database/role. `host.docker.internal` is mapped to the Docker host
 by the host deployment file. Keep the Compose project name unchanged so the
 existing `uploads_data` volume is reused. Do not publish PostgreSQL from Docker.
+Use the matching frontend release: its Nginx proxy resolves `friendo-api`, the
+unique backend network alias, to avoid collisions with Toggle Ctrl's `api` service.
 
 Docker Compose reads `COMPOSE_FILE` from `.env`, so the existing `~/bin/start-friendo`
 launcher selects the host deployment automatically. Its port-selection and tunnel
