@@ -9,7 +9,7 @@ import { hashPassword } from '../../../utils/PasswordHashFacade';
 import { UserDestructuring } from '../../../utils/userDestructuring';
 
 export class Register implements ICommand {
-    public async execute(req: Request, res: Response): Promise<void> {
+    public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
         try {
             const passwordHash = await hashPassword(req.body.password);
 

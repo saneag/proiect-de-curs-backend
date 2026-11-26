@@ -4,7 +4,7 @@ import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 import { prisma } from '../../../db';
 
 export class Logout implements ICommand {
-    public async execute(req: Request, res: Response): Promise<void> {
+    public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
         try {
             const { refreshToken } = req.body;
             if (typeof refreshToken === 'string') {

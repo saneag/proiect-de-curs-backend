@@ -35,34 +35,34 @@ class PostController implements IPostController {
         return this._instance;
     }
 
-    public async createPost(req: Request, res: Response): Promise<void> {
+    public async createPost(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.createPostCommand.execute(req, res);
     }
 
     public async createPostWithImage(
-        req: Request,
+        req: Request<Record<string, string>>,
         res: Response
     ): Promise<void> {
         await this.createPostWithImageCommand.execute(req, res);
     }
 
-    public async deletePost(req: Request, res: Response): Promise<void> {
+    public async deletePost(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.deletePostCommand.execute(req, res);
     }
 
-    public async updatePost(req: Request, res: Response): Promise<void> {
+    public async updatePost(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.updatePostCommand.execute(req, res);
     }
 
-    public async getPosts(req: Request, res: Response): Promise<void> {
+    public async getPosts(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.getPostsCommand.execute(req, res);
     }
 
-    public async getPost(req: Request, res: Response): Promise<void> {
+    public async getPost(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.getPostCommand.execute(req, res);
     }
 
-    public async reactToPost(req: Request, res: Response): Promise<void> {
+    public async reactToPost(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.reactStrategyContext.performAction(req, res);
     }
 }

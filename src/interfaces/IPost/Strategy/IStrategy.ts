@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
 
 export interface IStrategy {
-    performAction(req: Request, res: Response): Promise<void>;
+    performAction(req: Request<Record<string, string>>, res: Response): Promise<void>;
 }

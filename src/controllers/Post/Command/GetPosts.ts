@@ -4,7 +4,7 @@ import { Prisma } from '../../../generated/prisma/client';
 import { ICommand } from '../../../interfaces/IPost/Command/ICommand';
 import { postInclude, postResponse } from '../../../utils/postResponse';
 export class GetPosts implements ICommand {
-    public async execute(req: Request, res: Response): Promise<void> {
+    public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
         try {
             const requestedLimit = Number.parseInt(
                 String(req.query.limit || '10'),

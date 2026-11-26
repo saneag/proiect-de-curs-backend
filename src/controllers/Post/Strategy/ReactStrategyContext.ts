@@ -4,7 +4,7 @@ import { IStrategy } from '../../../interfaces/IPost/Strategy/IStrategy';
 import { prisma } from '../../../db';
 
 export class ReactStrategyContext {
-    public async performAction(req: Request, res: Response): Promise<void> {
+    public async performAction(req: Request<Record<string, string>>, res: Response): Promise<void> {
         const { reactionType } = req.params;
         let strategy: IStrategy;
 

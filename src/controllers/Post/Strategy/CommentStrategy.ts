@@ -3,7 +3,7 @@ import { prisma } from '../../../db';
 import { snapshot } from '../../../utils/postResponse';
 import { IStrategy } from '../../../interfaces/IPost/Strategy/IStrategy';
 export class CommentStrategy implements IStrategy {
-    public async performAction(req: Request, res: Response): Promise<void> {
+    public async performAction(req: Request<Record<string, string>>, res: Response): Promise<void> {
         try {
             const content = req.body.content;
             if (

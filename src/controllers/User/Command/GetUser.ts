@@ -6,7 +6,7 @@ import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 import { UserDestructuring } from '../../../utils/userDestructuring';
 
 export class GetUser implements ICommand {
-    public async execute(req: Request, res: Response): Promise<void> {
+    public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
         try {
             const user = await prisma.user.findUnique({
                 where: { id: req.params.userId },

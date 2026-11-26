@@ -40,38 +40,38 @@ export class UserController implements IUserController {
         return this._instance;
     }
 
-    public async login(req: Request, res: Response): Promise<void> {
+    public async login(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.loginCommand.execute(req, res);
     }
 
     public async refreshAccessToken(
-        req: Request,
+        req: Request<Record<string, string>>,
         res: Response
     ): Promise<void> {
         await this.refreshAccessTokenCommand.execute(req, res);
     }
 
-    public async register(req: Request, res: Response): Promise<void> {
+    public async register(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.registerCommand.execute(req, res);
     }
 
-    public async logout(req: Request, res: Response): Promise<void> {
+    public async logout(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.logoutCommand.execute(req, res);
     }
 
-    public async getUser(req: Request, res: Response): Promise<void> {
+    public async getUser(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.getUserCommand.execute(req, res);
     }
 
-    public async getUserByEmail(req: Request, res: Response): Promise<void> {
+    public async getUserByEmail(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.getUserByEmailCommand.execute(req, res);
     }
 
-    public async updateUser(req: Request, res: Response): Promise<void> {
+    public async updateUser(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.updateUserCommand.execute(req, res);
     }
 
-    public async getAllUsers(req: Request, res: Response): Promise<void> {
+    public async getAllUsers(req: Request<Record<string, string>>, res: Response): Promise<void> {
         await this.getUsersCommand.execute(req, res);
     }
 }

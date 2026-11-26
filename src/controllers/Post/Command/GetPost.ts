@@ -3,7 +3,7 @@ import { prisma } from '../../../db';
 import { ICommand } from '../../../interfaces/IPost/Command/ICommand';
 import { postInclude, postResponse } from '../../../utils/postResponse';
 export class GetPost implements ICommand {
-    public async execute(req: Request, res: Response): Promise<void> {
+    public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
         try {
             const post = await prisma.post.findUnique({
                 where: { id: req.params.postId },

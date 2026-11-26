@@ -6,7 +6,7 @@ import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 import { UserDestructuring } from '../../../utils/userDestructuring';
 
 export class GetUsers implements ICommand {
-    public async execute(req: Request, res: Response): Promise<void> {
+    public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
         try {
             const users = await prisma.user.findMany();
 

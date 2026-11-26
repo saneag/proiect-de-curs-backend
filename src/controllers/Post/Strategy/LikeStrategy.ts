@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { IStrategy } from '../../../interfaces/IPost/Strategy/IStrategy';
 import { toggleReaction } from './toggleReaction';
 export class LikeStrategy implements IStrategy {
-    public async performAction(req: Request, res: Response): Promise<void> {
+    public async performAction(req: Request<Record<string, string>>, res: Response): Promise<void> {
         try {
             const found = await toggleReaction(
                 req.params.postId,
