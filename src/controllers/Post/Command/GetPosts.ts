@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../../../db';
 import { Prisma } from '../../../generated/prisma/client';
 import { ICommand } from '../../../interfaces/IPost/Command/ICommand';
+import { isUuid } from '../../../utils/validation';
 import { postInclude, postResponse } from '../../../utils/postResponse';
 export class GetPosts implements ICommand {
     public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
@@ -28,13 +29,23 @@ export class GetPosts implements ICommand {
                 String(value || '').replace(/[\\%_]/g, '\\$&');
             const search = escape(req.query.search);
             const email = escape(req.query.email);
+            const creatorId = req.query.creatorId;
             const where: Prisma.PostWhereInput = {
+                // A malformed id matches nothing instead of listing every post.
+                ...(creatorId === undefined
+                    ? {}
+                    : {
+                          creatorId: isUuid(creatorId)
+                              ? creatorId
+                              : '00000000-0000-0000-0000-000000000000',
+                      }),
                 ...(email
                     ? {
-                          creatorSnapshot: {
-                              path: ['email'],
-                              string_contains: email,
-                              mode: 'insensitive' as const,
+                          creator: {
+                              email: {
+                                  contains: email,
+                                  mode: 'insensitive' as const,
+                              },
                           },
                       }
                     : {}),
@@ -48,10 +59,11 @@ export class GetPosts implements ICommand {
                                   },
                               },
                               ...['firstName', 'lastName'].map((field) => ({
-                                  creatorSnapshot: {
-                                      path: [field],
-                                      string_contains: search,
-                                      mode: 'insensitive' as const,
+                                  creator: {
+                                      [field]: {
+                                          contains: search,
+                                          mode: 'insensitive' as const,
+                                      },
                                   },
                               })),
                           ],

@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../../db';
-import { snapshot } from '../../../utils/postResponse';
 import { IStrategy } from '../../../interfaces/IPost/Strategy/IStrategy';
 export class CommentStrategy implements IStrategy {
     public async performAction(req: Request<Record<string, string>>, res: Response): Promise<void> {
@@ -35,7 +34,6 @@ export class CommentStrategy implements IStrategy {
                 data: {
                     postId: post.id,
                     creatorId: user.id,
-                    creatorSnapshot: snapshot(user),
                     content: content.trim(),
                 },
             });

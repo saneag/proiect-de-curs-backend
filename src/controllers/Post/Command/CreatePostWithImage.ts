@@ -8,7 +8,6 @@ import { PostBuilder } from '../Builder/PostBuilder';
 import { validPost } from '../../../utils/validation';
 import { preparePostContent } from '../../../utils/postContent';
 import { uploadExists } from '../../../utils/uploads';
-import { snapshot } from '../../../utils/postResponse';
 
 export class CreatePostWithImage implements ICommand {
     public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
@@ -51,12 +50,11 @@ export class CreatePostWithImage implements ICommand {
                 .setContent(storedContent)
                 .setImage(image);
 
-            const { creator, ...data } = post.buildPostWithImages();
+            const { creator: _creator, ...data } = post.buildPostWithImages();
             await prisma.post.create({
                 data: {
                     ...data,
                     creatorId: user.id,
-                    creatorSnapshot: snapshot(creator),
                 },
             });
 

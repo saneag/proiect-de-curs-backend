@@ -1,27 +1,28 @@
 import { Prisma } from '../generated/prisma/client';
-import { ISimpleUser } from '../interfaces/IUser/IUser';
 import { renderPostContent } from './postContent';
-export const snapshot = (user: ISimpleUser) => ({
-    firstName: user.firstName,
-    lastName: user.lastName,
-    email: user.email,
-    avatarUrl: user.avatarUrl,
-});
+export const creatorSelect = {
+    id: true,
+    firstName: true,
+    lastName: true,
+    email: true,
+    avatarUrl: true,
+} satisfies Prisma.UserSelect;
+
 export const postInclude = {
-    comments: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
+    creator: { select: creatorSelect },
+    comments: {
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        include: { creator: { select: creatorSelect } },
+    },
     reactions: { orderBy: { id: 'asc' } },
 } satisfies Prisma.PostInclude;
 type PostWithRelations = Prisma.PostGetPayload<{ include: typeof postInclude }>;
 export function postResponse(post: PostWithRelations) {
-    const { creatorSnapshot, comments, reactions, ...fields } = post;
+    const { comments, reactions, ...fields } = post;
     return {
         ...fields,
-        creator: creatorSnapshot,
         content: renderPostContent(post.content),
-        comments: comments.map(({ creatorSnapshot, ...comment }) => ({
-            ...comment,
-            creator: creatorSnapshot,
-        })),
+        comments,
         reactions: reactions.map(({ type, ...reaction }) => ({
             ...reaction,
             like: type === 'LIKE',

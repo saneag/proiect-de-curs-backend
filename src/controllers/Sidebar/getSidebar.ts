@@ -7,14 +7,8 @@ const TRENDING_LIMIT = 5;
 const ACTIVITY_LIMIT = 5;
 const SNIPPET_LENGTH = 90;
 
-interface Snapshot {
-    firstName?: string;
-    lastName?: string;
-    avatarUrl?: string;
-}
-
-const readSnapshot = (value: unknown): Snapshot =>
-    value && typeof value === 'object' ? (value as Snapshot) : {};
+const fullName = (user: { firstName: string; lastName: string }) =>
+    `${user.firstName} ${user.lastName}`.trim();
 
 async function trendingPosts() {
     const since = new Date(Date.now() - WEEK_MS);
@@ -41,20 +35,23 @@ async function trendingPosts() {
 
     const posts = await prisma.post.findMany({
         where: { id: { in: ranked.map((row) => row.postId) } },
-        select: { id: true, title: true, creatorSnapshot: true },
+        select: {
+            id: true,
+            title: true,
+            creator: { select: { firstName: true, lastName: true } },
+        },
     });
     const byId = new Map(posts.map((post) => [post.id, post]));
 
     return ranked.flatMap((row) => {
         const post = byId.get(row.postId);
         if (!post) return [];
-        const author = readSnapshot(post.creatorSnapshot);
         return [
             {
                 id: post.id,
                 title: post.title,
                 likes: row._count.postId,
-                author: `${author.firstName ?? ''} ${author.lastName ?? ''}`.trim(),
+                author: fullName(post.creator),
             },
         ];
     });
@@ -69,19 +66,20 @@ async function recentActivity(userId: string) {
             id: true,
             content: true,
             createdAt: true,
-            creatorSnapshot: true,
+            creator: {
+                select: { firstName: true, lastName: true, avatarUrl: true },
+            },
             post: { select: { id: true, title: true } },
         },
     });
 
     return comments.map((comment) => {
-        const author = readSnapshot(comment.creatorSnapshot);
         return {
             id: comment.id,
             postId: comment.post.id,
             postTitle: comment.post.title,
-            author: `${author.firstName ?? ''} ${author.lastName ?? ''}`.trim(),
-            avatarUrl: author.avatarUrl ?? '',
+            author: fullName(comment.creator),
+            avatarUrl: comment.creator.avatarUrl,
             snippet:
                 comment.content.length > SNIPPET_LENGTH
                     ? `${comment.content.slice(0, SNIPPET_LENGTH)}…`

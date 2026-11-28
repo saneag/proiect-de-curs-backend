@@ -3,13 +3,21 @@ import { Request, Response } from 'express';
 import { prisma } from '../../../db';
 
 import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
+import { isUuid } from '../../../utils/validation';
 import { UserDestructuring } from '../../../utils/userDestructuring';
 
-export class GetUserByEmail implements ICommand {
+export class GetUserById implements ICommand {
     public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
         try {
+            if (!isUuid(req.params.id)) {
+                res.status(404).json({
+                    message: 'User not found',
+                });
+                return;
+            }
+
             const user = await prisma.user.findUnique({
-                where: { email: req.params.email },
+                where: { id: req.params.id },
             });
 
             if (!user) {

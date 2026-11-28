@@ -24,9 +24,9 @@ const upload = multerInstance.init('userAvatar').getMulterUpload();
 
 userRoutes.get('/user', checkAuth, UserController.getUser.bind(UserController));
 userRoutes.get(
-    '/user/:email',
+    '/user/:id',
     checkAuth,
-    UserController.getUserByEmail.bind(UserController)
+    UserController.getUserById.bind(UserController)
 );
 userRoutes.get(
     '/users',

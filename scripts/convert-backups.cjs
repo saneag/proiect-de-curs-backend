@@ -67,13 +67,13 @@ function convert(usersSource, postsSource) {
         assert(!postIds.has(post.id), 'Duplicate post ID');
         postIds.add(post.id);
         const { creator, comments = [], reactions = [], tags, ...row } = post;
-        data.posts.push({ ...row, id: mapId('post', post.id), creatorId: ownerId(creator), creatorSnapshot: creator });
+        data.posts.push({ ...row, id: mapId('post', post.id), creatorId: ownerId(creator) });
         comments.forEach((comment, index) => {
             assert.equal(comment.postId, post.id, 'Comment refers to a different post');
             const { creator, ...row } = comment;
             data.comments.push({ ...row, id: mapId('comment', row.id || `${post.id}-comment-${index + 1}`),
                 postId: mapId('post', post.id),
-                creatorId: ownerId(creator), creatorSnapshot: creator });
+                creatorId: ownerId(creator) });
         });
         const seen = new Set();
         reactions.forEach((reaction, index) => {

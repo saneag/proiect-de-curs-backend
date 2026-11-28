@@ -13,7 +13,7 @@ test('converts Extended JSON, IDs, dates, snapshots and relational data without 
     assert.equal('tags' in data.posts[0], false);
     assert.equal(data.posts[0].createdAt, '2023-06-01T12:00:00.000Z');
     assert.equal(data.posts[0].creatorId, mapId('user', 'user-1'));
-    assert.deepEqual(data.posts[0].creatorSnapshot, fixture.posts[0].creator);
+    assert.equal('creatorSnapshot' in data.posts[0], false);
     assert.equal(data.comments[0].postId, mapId('post', 'post-1'));
     assert.equal(data.comments[0].id, mapId('comment', 'post-1-comment-1'));
     assert.deepEqual(data.reactions[0], { id: mapId('reaction', 'reaction-1'), postId: mapId('post', 'post-1'), userId: mapId('user', 'user-1'), type: 'LIKE' });

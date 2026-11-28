@@ -7,7 +7,6 @@ import { ICommand } from '../../../interfaces/IPost/Command/ICommand';
 import { PostBuilder } from '../Builder/PostBuilder';
 import { validPost } from '../../../utils/validation';
 import { preparePostContent } from '../../../utils/postContent';
-import { snapshot } from '../../../utils/postResponse';
 
 export class CreatePost implements ICommand {
     public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
@@ -48,12 +47,11 @@ export class CreatePost implements ICommand {
                 .setTitle(title.trim())
                 .setContent(storedContent);
 
-            const { creator, ...data } = post.buildSimplePost();
+            const { creator: _creator, ...data } = post.buildSimplePost();
             await prisma.post.create({
                 data: {
                     ...data,
                     creatorId: user.id,
-                    creatorSnapshot: snapshot(creator),
                 },
             });
 

@@ -16,7 +16,7 @@ export class UserController implements IUserController {
     private registerCommand: ICommand;
     private logoutCommand: ICommand;
     private getUserCommand: ICommand;
-    private getUserByEmailCommand: ICommand;
+    private getUserByIdCommand: ICommand;
     private getUsersCommand: ICommand;
     private updateUserCommand: ICommand;
 
@@ -26,7 +26,7 @@ export class UserController implements IUserController {
         this.registerCommand = new userCommands.register();
         this.logoutCommand = new userCommands.logout();
         this.getUserCommand = new userCommands.getUser();
-        this.getUserByEmailCommand = new userCommands.getUserByEmail();
+        this.getUserByIdCommand = new userCommands.getUserById();
         this.getUsersCommand = new userCommands.getUsers();
         this.updateUserCommand = new userCommands.updateUser();
     }
@@ -63,8 +63,8 @@ export class UserController implements IUserController {
         await this.getUserCommand.execute(req, res);
     }
 
-    public async getUserByEmail(req: Request<Record<string, string>>, res: Response): Promise<void> {
-        await this.getUserByEmailCommand.execute(req, res);
+    public async getUserById(req: Request<Record<string, string>>, res: Response): Promise<void> {
+        await this.getUserByIdCommand.execute(req, res);
     }
 
     public async updateUser(req: Request<Record<string, string>>, res: Response): Promise<void> {

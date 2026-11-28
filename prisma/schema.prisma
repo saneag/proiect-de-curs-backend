@@ -49,7 +49,6 @@ model Post {
   image     String   @default("") @db.VarChar(255)
   creatorId String @db.Uuid
   creator   User     @relation(fields: [creatorId], references: [id])
-  creatorSnapshot Json
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   comments  Comment[]
@@ -66,7 +65,6 @@ model Comment {
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   creatorId String @db.Uuid
   creator   User     @relation(fields: [creatorId], references: [id])
-  creatorSnapshot Json
   content   String   @db.VarChar(500)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)

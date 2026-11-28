@@ -262,14 +262,16 @@ test('reaction switching, toggling and concurrent requests preserve one reaction
     assert.equal(await prisma.reaction.count({ where: { postId } }), 1);
 });
 
-test('email changes retain post ownership, author snapshots and valid sessions', async () => {
+test('email changes retain post ownership, live author data and valid sessions', async () => {
     assert.equal((await request('PATCH', '/user/updateUser', { email: 'changed@example.com' }, tokens.accessToken)).status, 200);
     assert.equal((await request('GET', '/user', null, tokens.accessToken)).data.email, 'changed@example.com');
-    assert.equal((await request('GET', '/user/changed@example.com')).status, 403);
-    assert.equal((await request('GET', '/user/changed@example.com', null, tokens.accessToken)).status, 200);
+    const myId = (await request('GET', '/user', null, tokens.accessToken)).data.id;
+    assert.equal((await request('GET', `/user/${myId}`)).status, 403);
+    assert.equal((await request('GET', `/user/${myId}`, null, tokens.accessToken)).status, 200);
     assert.equal((await request('PATCH', `/update-post/${postId}`, { title: 'After email change' }, tokens.accessToken)).status, 200);
     const post = (await request('GET', `/get-post/${postId}`, null, tokens.accessToken)).data.post;
-    assert.equal(post.creator.email, alice.email);
+    assert.equal(post.creator.email, 'changed@example.com');
+    assert.equal(post.creator.id, myId);
     assert.equal(post.reactions[0].email, undefined);
     assert.equal((await request('GET', '/users')).status, 403);
     const users = (await request('GET', '/users', null, tokens.accessToken)).data.users;
@@ -308,8 +310,7 @@ test('rich posts keep their links and legacy posts still render', async () => {
     const shown = (await request('GET', '/get-posts?search=Rich', null, tokens.accessToken)).data.posts[0].content;
     assert.equal(shown, rich);
     const me = (await request('GET', '/user', null, tokens.accessToken)).data;
-    await prisma.post.create({ data: { title: 'Legacy post', content: '!@**bold** and //it//!@', creatorId: me.id,
-        creatorSnapshot: { firstName: me.firstName, lastName: me.lastName, email: me.email, avatarUrl: '' } } });
+    await prisma.post.create({ data: { title: 'Legacy post', content: '!@**bold** and //it//!@', creatorId: me.id } });
     const legacy = (await request('GET', '/get-posts?search=Legacy', null, tokens.accessToken)).data.posts[0].content;
     assert.equal(legacy, '<p><strong>bold</strong> and <em>it</em></p>');
 });

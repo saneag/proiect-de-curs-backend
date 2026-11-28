@@ -3,7 +3,7 @@ import { Register } from './Register';
 import { RefreshAccessToken } from './RefreshAccessToken';
 import { Logout } from './Logout';
 import { GetUser } from './GetUser';
-import { GetUserByEmail } from './GetUserByEmail';
+import { GetUserById } from './GetUserById';
 import { GetUsers } from './GetUsers';
 import { UpdateUser } from './UpdateUser';
 
@@ -13,7 +13,7 @@ export const userCommands = {
     refreshAccessToken: RefreshAccessToken,
     logout: Logout,
     getUser: GetUser,
-    getUserByEmail: GetUserByEmail,
+    getUserById: GetUserById,
     getUsers: GetUsers,
     updateUser: UpdateUser,
 };
