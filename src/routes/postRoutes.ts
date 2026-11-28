@@ -1,9 +1,9 @@
 import express from 'express';
 
-import path from 'path';
-import fs from 'fs';
-
 import multerInstance from '../shared/multerInstance';
+import { verifyImageSignature } from '../shared/imageSignature';
+import { deleteUpload } from '../shared/deleteUpload';
+import { uploadLimiter } from '../shared/rateLimiters';
 
 import PostController from '../controllers/Post/PostController';
 
@@ -38,7 +38,9 @@ postRoutes.post(
 postRoutes.post(
     '/post/postImage',
     checkAuth,
+    uploadLimiter,
     upload.single('postImage'),
+    verifyImageSignature,
     (req: any, res) => {
         if (!req.file) {
             res.status(400).json({ message: 'An image file is required.' });
@@ -67,26 +69,10 @@ postRoutes.delete(
     checkAuth,
     PostController.deletePost.bind(PostController)
 );
-postRoutes.delete('/post/postImage/:fileName', checkAuth, (req: any, res) => {
-    const fileName = req.params.fileName;
-    if (path.basename(fileName) !== fileName) {
-        res.status(400).json({ message: 'Invalid file name.' });
-        return;
-    }
-    const filePath = path.resolve(__dirname, '../uploads/postImage', fileName);
-
-    fs.unlink(filePath, (err) => {
-        if (err) {
-            res.status(500).json({
-                message: 'File could not be deleted.',
-            });
-            return;
-        }
-
-        res.json({
-            message: 'File deleted',
-        });
-    });
-});
+postRoutes.delete(
+    '/post/postImage/:fileName',
+    checkAuth,
+    deleteUpload('postImage')
+);
 
 export default postRoutes;

@@ -4,9 +4,10 @@ import { prisma } from '../../../db';
 
 import { ICommand } from '../../../interfaces/IPost/Command/ICommand';
 
-import { PostDecorator } from '../Decorator/PostDecorator';
 import { PostBuilder } from '../Builder/PostBuilder';
 import { validPost } from '../../../utils/validation';
+import { preparePostContent } from '../../../utils/postContent';
+import { uploadExists } from '../../../utils/uploads';
 import { snapshot } from '../../../utils/postResponse';
 
 export class CreatePostWithImage implements ICommand {
@@ -32,15 +33,12 @@ export class CreatePostWithImage implements ICommand {
                 return;
             }
 
-            const postDecorator = new PostDecorator();
-            const formattedText = postDecorator.decorateText(content);
+            const storedContent = preparePostContent(content);
 
             if (
-                !validPost({
-                    title,
-                    content: formattedText,
-                    image: req.body.image,
-                })
+                storedContent === null ||
+                !validPost({ title, image }) ||
+                !uploadExists(image, 'postImage')
             ) {
                 res.status(400).json({ message: 'Invalid post fields.' });
                 return;
@@ -50,7 +48,7 @@ export class CreatePostWithImage implements ICommand {
             const post = postBuilder
                 .setCreator(user)
                 .setTitle(title.trim())
-                .setContent(formattedText)
+                .setContent(storedContent)
                 .setImage(image);
 
             const { creator, ...data } = post.buildPostWithImages();

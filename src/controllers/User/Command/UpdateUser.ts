@@ -4,6 +4,7 @@ import { prisma } from '../../../db';
 
 import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 import { validUserUpdate } from '../../../utils/validation';
+import { uploadExists } from '../../../utils/uploads';
 import { UserBuilder } from '../Builder/UserBuilder';
 
 import { UserDestructuring } from '../../../utils/userDestructuring';
@@ -23,6 +24,18 @@ export class UpdateUser implements ICommand {
             }
 
             if (!validUserUpdate(req.body)) {
+                res.status(400).json({ message: 'Invalid profile fields.' });
+                return;
+            }
+
+            const { avatarUrl } = req.body;
+            // An unchanged (possibly legacy) avatar stays valid; a new one must exist.
+            if (
+                typeof avatarUrl === 'string' &&
+                avatarUrl !== '' &&
+                avatarUrl !== user.avatarUrl &&
+                !uploadExists(avatarUrl, 'userAvatar')
+            ) {
                 res.status(400).json({ message: 'Invalid profile fields.' });
                 return;
             }

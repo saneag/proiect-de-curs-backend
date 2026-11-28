@@ -43,6 +43,7 @@ services:
       JWTSECRET: ${JWTSECRET:?Set JWTSECRET in .env}
       JWTREFRESHSECRET: ${JWTREFRESHSECRET:?Set JWTREFRESHSECRET in .env}
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
     depends_on:
       migrate:
         condition: service_completed_successfully

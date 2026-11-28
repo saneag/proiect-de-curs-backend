@@ -3,6 +3,8 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 
+import { uploadOwnerPrefix } from '../utils/uploads';
+
 class MulterInstance {
     private static _instance: MulterInstance;
 
@@ -26,14 +28,15 @@ class MulterInstance {
                 fs.mkdirSync(destination, { recursive: true });
                 cb(null, destination);
             },
-            filename: (_, file, cb) => {
+            filename: (req, file, cb) => {
                 const extensions: Record<string, string> = {
                     'image/jpeg': '.jpg',
                     'image/png': '.png',
                     'image/gif': '.gif',
                     'image/webp': '.webp',
                 };
-                cb(null, `${randomUUID()}${extensions[file.mimetype]}`);
+                const owner = uploadOwnerPrefix(String(req.params.userId));
+                cb(null, `${owner}${randomUUID()}${extensions[file.mimetype]}`);
             },
         });
 

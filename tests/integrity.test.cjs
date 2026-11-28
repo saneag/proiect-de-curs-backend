@@ -35,7 +35,18 @@ async function request(method, route, body, accessToken) {
     const text = await response.text();
     let data;
     try { data = JSON.parse(text); } catch { data = text; }
-    return { status: response.status, data };
+    // Auth tokens arrive only as cookies; expose them on `data` so tests can send them as headers.
+    const setCookie = response.headers.getSetCookie();
+    const cookies = {};
+    for (const line of setCookie) {
+        const pair = line.split(';')[0];
+        const separator = pair.indexOf('=');
+        cookies[pair.slice(0, separator)] = pair.slice(separator + 1);
+    }
+    if (data && typeof data === 'object') {
+        for (const name of ['accessToken', 'refreshToken']) if (cookies[name]) data = { ...data, [name]: cookies[name] };
+    }
+    return { status: response.status, data, cookies, setCookie };
 }
 
 before(async () => {
@@ -72,6 +83,7 @@ before(async () => {
             JWTSECRET: randomBytes(32).toString('hex'),
             JWTREFRESHSECRET: randomBytes(32).toString('hex'),
             FRONTEND_ORIGIN: origin,
+            LOGIN_RATE_LIMIT: '6',
         },
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
@@ -167,7 +179,7 @@ test('reactions and comments use the authenticated identity', async () => {
     const post = (await request('GET', `/get-post/${postId}`, null, tokens.accessToken)).data.post;
     assert.equal(post.numberOfLikes, 1);
     assert.equal(post.numberOfComments, 1);
-    assert.equal(post.reactions[0].email, alice.email);
+    assert.equal(post.reactions[0].email, undefined);
     assert.equal(post.comments[0].creator.email, alice.email);
     assert.equal((await request('PATCH', `/react-to-post/${postId}/invalid`, {}, tokens.accessToken)).status, 400);
 });
@@ -182,6 +194,7 @@ test('avatar upload, profile update, image retrieval, and deletion work', async 
     const image = await fetch(origin + '/' + upload.data.url);
     assert.equal(image.status, 200);
     assert.deepEqual(Buffer.from(await image.arrayBuffer()), png);
+    assert.match(image.headers.get('content-security-policy'), /sandbox/);
     const updated = await request('PATCH', '/user/updateUser', { ...alice, avatarUrl: upload.data.url, description: 'Updated biography' }, tokens.accessToken);
     assert.equal(updated.status, 200);
     assert.equal(updated.data.description, 'Updated biography');
@@ -191,8 +204,9 @@ test('avatar upload, profile update, image retrieval, and deletion work', async 
 });
 
 test('post images upload and can be attached and removed', async () => {
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGq0AAAAASUVORK5CYII=', 'base64');
     const form = new FormData();
-    form.set('postImage', new Blob([Buffer.alloc(1_100_000)], { type: 'image/png' }), 'post.png');
+    form.set('postImage', new Blob([Buffer.concat([png, Buffer.alloc(1_100_000)])], { type: 'image/png' }), 'post.png');
     const upload = await request('POST', '/post/postImage', form, tokens.accessToken);
     assert.equal(upload.status, 200);
     assert.equal((await request('POST', '/create-post-with-image', { title: 'Image post', content: '<p>Photo</p>', image: upload.data.url }, tokens.accessToken)).status, 201);
@@ -251,12 +265,14 @@ test('reaction switching, toggling and concurrent requests preserve one reaction
 test('email changes retain post ownership, author snapshots and valid sessions', async () => {
     assert.equal((await request('PATCH', '/user/updateUser', { email: 'changed@example.com' }, tokens.accessToken)).status, 200);
     assert.equal((await request('GET', '/user', null, tokens.accessToken)).data.email, 'changed@example.com');
-    assert.equal((await request('GET', '/user/changed@example.com')).status, 200);
+    assert.equal((await request('GET', '/user/changed@example.com')).status, 403);
+    assert.equal((await request('GET', '/user/changed@example.com', null, tokens.accessToken)).status, 200);
     assert.equal((await request('PATCH', `/update-post/${postId}`, { title: 'After email change' }, tokens.accessToken)).status, 200);
     const post = (await request('GET', `/get-post/${postId}`, null, tokens.accessToken)).data.post;
     assert.equal(post.creator.email, alice.email);
-    assert.equal(post.reactions[0].email, 'changed@example.com');
-    const users = (await request('GET', '/users')).data.users;
+    assert.equal(post.reactions[0].email, undefined);
+    assert.equal((await request('GET', '/users')).status, 403);
+    const users = (await request('GET', '/users', null, tokens.accessToken)).data.users;
     assert(users.every(user => typeof user.id === 'string' && !user.passwordHash && !user.refreshToken));
 });
 
@@ -267,4 +283,156 @@ test('delete removes a post and logout revokes the refresh token', async () => {
     assert.equal(await prisma.reaction.count({ where: { postId } }), 0);
     assert.equal((await request('POST', '/user/logout', { refreshToken: tokens.refreshToken })).status, 200);
     assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: tokens.refreshToken })).status, 401);
+});
+
+const pngBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGq0AAAAASUVORK5CYII=', 'base64');
+const upload = async (route, field, buffer, type, accessToken) => {
+    const form = new FormData();
+    form.set(field, new Blob([buffer], { type }), 'file.png');
+    return request('POST', route, form, accessToken);
+};
+
+test('post HTML is sanitized on the server before it is stored', async () => {
+    const evil = '<p onclick="alert(1)">Hi</p><script>alert(1)</script><img src=x onerror=alert(1)>'
+        + '<a href="javascript:alert(1)">bad</a><a href="https://example.com/a">good</a>';
+    assert.equal((await request('POST', '/create-post', { title: 'Sanitized post', content: evil }, tokens.accessToken)).status, 201);
+    const stored = await prisma.post.findFirst({ where: { title: 'Sanitized post' } });
+    assert(!/script|onerror|onclick|javascript:|<img/i.test(stored.content));
+    const shown = (await request('GET', '/get-posts?search=Sanitized', null, tokens.accessToken)).data.posts[0].content;
+    assert.equal(shown, '<p>Hi</p>bad<a href="https://example.com/a">good</a>');
+});
+
+test('rich posts keep their links and legacy posts still render', async () => {
+    const rich = '<ul><li><p>One</p></li></ul><p><a href="https://a.com/x">a</a> and <a href="https://b.com/y">b</a> <em>it</em></p>';
+    assert.equal((await request('POST', '/create-post', { title: 'Rich post', content: rich }, tokens.accessToken)).status, 201);
+    const shown = (await request('GET', '/get-posts?search=Rich', null, tokens.accessToken)).data.posts[0].content;
+    assert.equal(shown, rich);
+    const me = (await request('GET', '/user', null, tokens.accessToken)).data;
+    await prisma.post.create({ data: { title: 'Legacy post', content: '!@**bold** and //it//!@', creatorId: me.id,
+        creatorSnapshot: { firstName: me.firstName, lastName: me.lastName, email: me.email, avatarUrl: '' } } });
+    const legacy = (await request('GET', '/get-posts?search=Legacy', null, tokens.accessToken)).data.posts[0].content;
+    assert.equal(legacy, '<p><strong>bold</strong> and <em>it</em></p>');
+});
+
+test('post fields with the wrong type, size or origin are rejected', async () => {
+    for (const content of [42, ['<p>x</p>'], { a: 1 }, '<p></p>', '<script>alert(1)</script>', '<p>' + 'a'.repeat(1001) + '</p>']) {
+        assert.equal((await request('POST', '/create-post', { title: 'Bad content', content }, tokens.accessToken)).status, 400, JSON.stringify(content).slice(0, 40));
+    }
+    for (const image of ['https://evil.example/x.png', 'javascript:alert(1)', 'uploads/postImage/../../index.js', 'uploads/userAvatar/x.png', 'uploads/postImage/missing.png', 42]) {
+        assert.equal((await request('POST', '/create-post-with-image', { title: 'Bad image', content: '<p>x</p>', image }, tokens.accessToken)).status, 400, String(image));
+    }
+    const post = (await request('GET', '/get-posts?search=Rich', null, tokens.accessToken)).data.posts[0];
+    assert.equal((await request('PATCH', `/update-post/${post.id}`, { image: 'javascript:alert(1)' }, tokens.accessToken)).status, 400);
+    assert.equal((await request('PATCH', `/update-post/${post.id}`, { content: { x: 1 } }, tokens.accessToken)).status, 400);
+    assert.equal((await request('PATCH', '/user/updateUser', { avatarUrl: 'https://evil.example/a.png' }, tokens.accessToken)).status, 400);
+});
+
+test('uploads must be real images and can only be deleted by their owner', async () => {
+    assert.equal((await upload('/post/postImage', 'postImage', Buffer.from('<html><script>alert(1)</script></html>'), 'image/png', tokens.accessToken)).status, 400);
+    assert.equal((await upload('/post/postImage', 'postImage', pngBytes, 'image/jpeg', tokens.accessToken)).status, 400);
+    const mine = await upload('/post/postImage', 'postImage', pngBytes, 'image/png', tokens.accessToken);
+    assert.equal(mine.status, 200);
+    const fileName = mine.data.url.split('/').pop();
+    assert.equal((await request('DELETE', '/post/postImage/' + fileName, null, otherTokens.accessToken)).status, 403);
+    assert.equal((await fetch(origin + '/' + mine.data.url)).status, 200);
+    assert.equal((await request('DELETE', '/post/postImage/' + fileName, null, tokens.accessToken)).status, 200);
+    assert.equal((await request('DELETE', '/post/postImage/' + fileName, null, tokens.accessToken)).status, 404);
+    assert.equal((await request('DELETE', '/post/postImage/..%2Findex.js', null, tokens.accessToken)).status, 400);
+});
+
+test('several devices can stay signed in and logout only ends one session', async () => {
+    const second = (await request('POST', '/user/login', bob)).data;
+    const third = (await request('POST', '/user/login', bob)).data;
+    assert.notEqual(second.refreshToken, third.refreshToken);
+    for (const session of [otherTokens, second, third]) {
+        assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: session.refreshToken })).status, 200);
+    }
+    assert.equal((await request('POST', '/user/logout', { refreshToken: second.refreshToken })).status, 200);
+    assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: second.refreshToken })).status, 401);
+    assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: otherTokens.refreshToken })).status, 200);
+    assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: third.refreshToken })).status, 200);
+    assert.equal((await request('POST', '/user/logout', { refreshToken: 'not-a-token' })).status, 200);
+});
+
+test('tokens are HttpOnly cookies that never appear in response bodies', async () => {
+    const carol = { ...alice, firstName: 'Carol', email: 'carol@example.com' };
+    assert.equal((await request('POST', '/user/register', carol)).status, 201);
+    const response = await fetch(origin + '/api/hf/user/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(carol),
+    });
+    const body = await response.text();
+    assert(!/accessToken|refreshToken|eyJ/.test(body), body);
+    const cookies = response.headers.getSetCookie();
+    const access = cookies.find(line => line.startsWith('accessToken='));
+    const refresh = cookies.find(line => line.startsWith('refreshToken='));
+    for (const line of [access, refresh]) {
+        assert.match(line, /HttpOnly/i);
+        assert.match(line, /SameSite=Strict/i);
+    }
+    assert.match(access, /Path=\/api\/hf(;|$)/i);
+    assert.match(refresh, /Path=\/api\/hf\/user(;|$)/i);
+    assert.match(access, /Max-Age=900/i);
+    assert.match(refresh, /Max-Age=1209600/i);
+
+    // A browser authenticates with the cookie alone.
+    const cookieHeader = cookies.map(line => line.split(';')[0]).join('; ');
+    const profile = await fetch(origin + '/api/hf/user', { headers: { Cookie: cookieHeader } });
+    assert.equal(profile.status, 200);
+    assert.equal((await profile.json()).email, carol.email);
+});
+
+test('state-changing requests from another origin are refused and credentials stay on the frontend origin', async () => {
+    const forbidden = await fetch(origin + '/api/hf/user/logout', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://evil.example' }, body: '{}',
+    });
+    assert.equal(forbidden.status, 403);
+    const allowed = await fetch(origin + '/api/hf/user/logout', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body: '{}',
+    });
+    assert.equal(allowed.status, 200);
+    const preflight = await fetch(origin + '/api/hf/user/login', {
+        method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'POST' },
+    });
+    assert.equal(preflight.headers.get('access-control-allow-origin'), origin);
+    assert.equal(preflight.headers.get('access-control-allow-credentials'), 'true');
+    const foreign = await fetch(origin + '/api/hf/user/login', {
+        method: 'OPTIONS', headers: { Origin: 'https://evil.example', 'Access-Control-Request-Method': 'POST' },
+    });
+    assert.notEqual(foreign.headers.get('access-control-allow-origin'), 'https://evil.example');
+});
+
+test('refresh tokens rotate, tolerate a short overlap and revoke every session when replayed', async () => {
+    const carol = { ...alice, email: 'carol@example.com' };
+    const first = (await request('POST', '/user/login', carol)).data;
+    const phone = (await request('POST', '/user/login', carol)).data;
+    const refreshed = await request('POST', '/user/refreshAccessToken', { refreshToken: first.refreshToken });
+    assert.equal(refreshed.status, 200);
+    assert.match(refreshed.setCookie.join('\n'), /refreshToken=.*HttpOnly/i);
+    assert.notEqual(refreshed.data.refreshToken, first.refreshToken);
+    // The retired token still works for a moment, which covers two tabs refreshing at once.
+    const overlap = await request('POST', '/user/refreshAccessToken', { refreshToken: first.refreshToken });
+    assert.equal(overlap.status, 200);
+
+    // Once the overlap has passed, replaying the retired token proves it was copied.
+    const row = await prisma.user.findUnique({ where: { email: carol.email } });
+    await prisma.user.update({ where: { id: row.id }, data: {
+        refreshToken: row.refreshToken.split(',').map(entry => entry.includes('.') ? entry.replace(/\.\d+$/, '.1') : entry).join(',') } });
+    const replay = await request('POST', '/user/refreshAccessToken', { refreshToken: first.refreshToken });
+    assert.equal(replay.status, 401);
+    assert.match(replay.setCookie.join('\n'), /refreshToken=;/);
+    assert.equal((await prisma.user.findUnique({ where: { email: carol.email } })).refreshToken, null);
+    assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: phone.refreshToken })).status, 401);
+    assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: overlap.data.refreshToken })).status, 401);
+});
+
+test('refresh tokens are stored hashed and credentials are rate limited', async () => {
+    const row = await prisma.user.findUnique({ where: { email: bob.email } });
+    assert(row.refreshToken.split(',').every(entry => /^[0-9a-f]{64}(\.[0-9a-f]{64}\.\d+)?$/.test(entry)));
+    assert(!row.refreshToken.includes(otherTokens.refreshToken));
+    assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: otherTokens.refreshToken })).status, 200);
+    const statuses = [];
+    for (let attempt = 0; attempt < 12; attempt++) {
+        statuses.push((await request('POST', '/user/login', { email: bob.email, password: 'wrong-password' })).status);
+    }
+    assert(statuses.includes(429), statuses.join(','));
 });

@@ -4,9 +4,9 @@ import { prisma } from '../../../db';
 
 import { ICommand } from '../../../interfaces/IPost/Command/ICommand';
 
-import { PostDecorator } from '../Decorator/PostDecorator';
 import { PostBuilder } from '../Builder/PostBuilder';
 import { validPost } from '../../../utils/validation';
+import { preparePostContent } from '../../../utils/postContent';
 import { snapshot } from '../../../utils/postResponse';
 
 export class CreatePost implements ICommand {
@@ -32,15 +32,11 @@ export class CreatePost implements ICommand {
                 return;
             }
 
-            const postDecorator = new PostDecorator();
-            const formattedText = postDecorator.decorateText(content);
+            const storedContent = preparePostContent(content);
 
             if (
-                !validPost({
-                    title,
-                    content: formattedText,
-                    image: req.body.image,
-                })
+                storedContent === null ||
+                !validPost({ title, image: req.body.image })
             ) {
                 res.status(400).json({ message: 'Invalid post fields.' });
                 return;
@@ -50,7 +46,7 @@ export class CreatePost implements ICommand {
             const post = postBuilder
                 .setCreator(user)
                 .setTitle(title.trim())
-                .setContent(formattedText);
+                .setContent(storedContent);
 
             const { creator, ...data } = post.buildSimplePost();
             await prisma.post.create({

@@ -83,6 +83,10 @@ Start the frontend in another terminal with `npm run dev`. Vite normally listens
 | `JWTREFRESHSECRET` | Separate refresh-token signing secret, at least 32 characters. |
 | `PORT` | Internal API port; defaults to 5000. |
 | `FRONTEND_ORIGIN` | Allowed browser origin, such as `http://localhost:5173` for development. |
+| `TRUST_PROXY` | Number of reverse proxies in front of the API (Compose sets 1). Rate limits use the real client address only when this is correct. |
+| `COOKIE_SECURE` | Optional. Sessions are stored in HttpOnly cookies, marked `Secure` automatically when `FRONTEND_ORIGIN` starts with `https://`. Set `true` or `false` to override. |
+| `COOKIE_SAMESITE` | Optional. `strict` (default), `lax` or `none`. Keep `strict` when the frontend and API share a site; `none` needs HTTPS. |
+| `LOGIN_RATE_LIMIT` | Optional. Failed logins allowed per client per 15 minutes; defaults to 20. `REGISTER_RATE_LIMIT`, `REFRESH_RATE_LIMIT` and `UPLOAD_RATE_LIMIT` work the same way. |
 | `POSTGRES_USER` | Compose database role; defaults to `friendo_app`. |
 | `POSTGRES_PASSWORD` | Required password for Compose database initialization. |
 | `POSTGRES_DB` | Compose database name; defaults to `friendo`. |

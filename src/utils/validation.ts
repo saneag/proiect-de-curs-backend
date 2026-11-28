@@ -1,5 +1,7 @@
+import { isUploadPath } from './uploads';
+
 export function validPost(
-    data: { title?: unknown; content?: unknown; image?: unknown },
+    data: { title?: unknown; image?: unknown },
     partial = false
 ): boolean {
     const text = (value: unknown, min: number, max: number) =>
@@ -8,9 +10,7 @@ export function validPost(
         value.trim().length <= max;
     return (
         ((partial && data.title === undefined) || text(data.title, 3, 50)) &&
-        ((partial && data.content === undefined) ||
-            text(data.content, 3, 1000)) &&
-        (data.image === undefined || typeof data.image === 'string')
+        (data.image === undefined || isUploadPath(data.image, 'postImage'))
     );
 }
 
@@ -28,6 +28,7 @@ export function validUserUpdate(data: Record<string, unknown>): boolean {
         (data.description === undefined ||
             (typeof data.description === 'string' &&
                 data.description.length <= 300)) &&
-        (data.avatarUrl === undefined || typeof data.avatarUrl === 'string')
+        (data.avatarUrl === undefined ||
+            isUploadPath(data.avatarUrl, 'userAvatar'))
     );
 }

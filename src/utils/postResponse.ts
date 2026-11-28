@@ -1,6 +1,6 @@
 import { Prisma } from '../generated/prisma/client';
 import { ISimpleUser } from '../interfaces/IUser/IUser';
-import { PostDecorator } from '../controllers/Post/Decorator/PostDecorator';
+import { renderPostContent } from './postContent';
 export const snapshot = (user: ISimpleUser) => ({
     firstName: user.firstName,
     lastName: user.lastName,
@@ -9,10 +9,7 @@ export const snapshot = (user: ISimpleUser) => ({
 });
 export const postInclude = {
     comments: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
-    reactions: {
-        include: { user: { select: { email: true } } },
-        orderBy: { id: 'asc' },
-    },
+    reactions: { orderBy: { id: 'asc' } },
 } satisfies Prisma.PostInclude;
 type PostWithRelations = Prisma.PostGetPayload<{ include: typeof postInclude }>;
 export function postResponse(post: PostWithRelations) {
@@ -20,14 +17,13 @@ export function postResponse(post: PostWithRelations) {
     return {
         ...fields,
         creator: creatorSnapshot,
-        content: new PostDecorator().simplifyText(post.content),
+        content: renderPostContent(post.content),
         comments: comments.map(({ creatorSnapshot, ...comment }) => ({
             ...comment,
             creator: creatorSnapshot,
         })),
-        reactions: reactions.map(({ user, type, ...reaction }) => ({
+        reactions: reactions.map(({ type, ...reaction }) => ({
             ...reaction,
-            email: user.email,
             like: type === 'LIKE',
             dislike: type === 'DISLIKE',
         })),

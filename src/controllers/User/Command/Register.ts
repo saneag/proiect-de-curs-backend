@@ -19,7 +19,7 @@ export class Register implements ICommand {
                 .setLastName(req.body.lastName)
                 .setEmail(req.body.email)
                 .setPasswordHash(passwordHash)
-                .setAvatarUrl(req.body.avatarUrl);
+                .setAvatarUrl('');
 
             const user = await prisma.user.create({
                 data: userBuilder.build(),

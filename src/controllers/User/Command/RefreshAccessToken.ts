@@ -5,21 +5,36 @@ import { prisma } from '../../../db';
 
 import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 import { IDecodedJwt } from '../../../interfaces/IUser/IDecodedJwt';
+import {
+    clearAuthCookies,
+    readRefreshToken,
+    setAuthCookies,
+} from '../../../utils/authCookies';
+import {
+    JWT_ALGORITHM,
+    rotateRefreshToken,
+    signAccessToken,
+    signRefreshToken,
+} from '../../../utils/tokens';
 
 export class RefreshAccessToken implements ICommand {
     public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
+        const reject = (message = 'Invalid refresh token') => {
+            clearAuthCookies(res);
+            res.status(401).json({ message });
+        };
+
         try {
-            const { refreshToken } = req.body;
-            if (typeof refreshToken !== 'string') {
-                res.status(401).json({
-                    message: 'Invalid refresh token',
-                });
+            const refreshToken = readRefreshToken(req);
+            if (!refreshToken) {
+                reject();
                 return;
             }
 
             const decoded: IDecodedJwt = jwt.verify(
                 refreshToken,
-                process.env.JWTREFRESHSECRET as string
+                process.env.JWTREFRESHSECRET as string,
+                { algorithms: [JWT_ALGORITHM] }
             ) as IDecodedJwt;
 
             const user = await prisma.user.findUnique({
@@ -27,35 +42,43 @@ export class RefreshAccessToken implements ICommand {
             });
 
             if (!user) {
-                res.status(401).json({
-                    message: 'Invalid refresh token',
-                });
+                reject();
                 return;
             }
 
-            // Only the currently issued token remains valid; logout/re-login revokes older tokens.
-            if (user.refreshToken !== refreshToken) {
-                res.status(401).json({ message: 'Invalid refresh token' });
-                return;
-            }
-
-            const accessToken = jwt.sign(
-                { userId: user.id },
-                process.env.JWTSECRET as string,
-                {
-                    expiresIn: '1h',
-                }
+            // Every refresh issues a new refresh token and retires the old one.
+            const newRefreshToken = signRefreshToken(user.id);
+            const rotation = rotateRefreshToken(
+                user.refreshToken,
+                refreshToken,
+                newRefreshToken
             );
 
-            res.status(200).json({
-                message: 'Access token refreshed',
-                accessToken: accessToken,
+            if (rotation.status === 'reuse') {
+                // A retired token was replayed: assume it was copied and end every session.
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { refreshToken: null },
+                });
+                reject();
+                return;
+            }
+
+            if (rotation.status === 'invalid') {
+                reject();
+                return;
+            }
+
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { refreshToken: rotation.stored },
             });
+
+            setAuthCookies(res, signAccessToken(user.id), newRefreshToken);
+            res.status(200).json({ message: 'Access token refreshed' });
         } catch (error) {
             if (error instanceof jwt.JsonWebTokenError) {
-                res.status(401).json({
-                    message: 'Invalid or expired refresh token',
-                });
+                reject('Invalid or expired refresh token');
                 return;
             }
             console.error(error as Error);

@@ -2,9 +2,11 @@ import { body } from 'express-validator';
 
 export const loginValidation = [
     body('email', 'Invalid email format').isEmail(),
-    body('password', 'Password must contain at least 4 symbols').isLength({
-        min: 4,
-    }),
+    body('password', 'Password is required').isString().notEmpty(),
+    body('password', 'Password must be at most 72 UTF-8 bytes').custom(
+        (value: unknown) =>
+            typeof value === 'string' && Buffer.byteLength(value, 'utf8') <= 72
+    ),
 ];
 
 export const registerValidation = [

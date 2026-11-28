@@ -1,11 +1,15 @@
 import { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
-
 import { prisma } from '../../../db';
 
 import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 
 import { comparePasswords } from '../../../utils/PasswordHashFacade';
+import { setAuthCookies } from '../../../utils/authCookies';
+import {
+    addRefreshToken,
+    signAccessToken,
+    signRefreshToken,
+} from '../../../utils/tokens';
 
 export class Login implements ICommand {
     public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
@@ -32,32 +36,22 @@ export class Login implements ICommand {
                 return;
             }
 
-            const accessToken = jwt.sign(
-                { userId: user.id },
-                process.env.JWTSECRET as string,
-                {
-                    expiresIn: '1h',
-                }
-            );
-
-            const refreshToken = jwt.sign(
-                { userId: user.id },
-                process.env.JWTREFRESHSECRET as string,
-                {
-                    expiresIn: '14d',
-                }
-            );
+            const accessToken = signAccessToken(user.id);
+            const refreshToken = signRefreshToken(user.id);
 
             await prisma.user.update({
                 where: { id: user.id },
-                data: { refreshToken },
+                data: {
+                    refreshToken: addRefreshToken(
+                        user.refreshToken,
+                        refreshToken
+                    ),
+                },
             });
 
-            res.status(200).json({
-                message: 'Login successful',
-                accessToken: accessToken,
-                refreshToken: refreshToken,
-            });
+            // The tokens travel only as HttpOnly cookies, never in the response body.
+            setAuthCookies(res, accessToken, refreshToken);
+            res.status(200).json({ message: 'Login successful' });
         } catch (error) {
             console.error(error as Error);
             res.status(500).send('Server error');

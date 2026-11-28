@@ -5,15 +5,18 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { IDecodedJwt } from '../../interfaces/IUser/IDecodedJwt';
+import { readAccessToken } from '../../utils/authCookies';
+import { JWT_ALGORITHM } from '../../utils/tokens';
 
 export default (req: Request, res: Response, next: NextFunction) => {
-    const token = req.headers.authorization?.split(' ')[1];
+    const token = readAccessToken(req);
 
     if (token) {
         try {
             const decoded: IDecodedJwt = jwt.verify(
                 token,
-                process.env.JWTSECRET as string
+                process.env.JWTSECRET as string,
+                { algorithms: [JWT_ALGORITHM] }
             ) as IDecodedJwt;
             req.params.userId = decoded.userId;
             next();

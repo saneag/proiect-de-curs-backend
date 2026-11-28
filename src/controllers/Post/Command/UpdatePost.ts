@@ -3,7 +3,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../../../db';
 import { ICommand } from '../../../interfaces/IPost/Command/ICommand';
 import { validPost } from '../../../utils/validation';
-import { PostDecorator } from '../Decorator/PostDecorator';
+import { preparePostContent } from '../../../utils/postContent';
+import { uploadExists } from '../../../utils/uploads';
 
 export class UpdatePost implements ICommand {
     public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
@@ -27,13 +28,33 @@ export class UpdatePost implements ICommand {
             const { title, content, image } = req.body;
             if (title !== undefined) updates.title = title;
             if (content !== undefined) {
-                updates.content = new PostDecorator().decorateText(content);
+                const storedContent = preparePostContent(content);
+                if (storedContent === null) {
+                    res.status(400).json({ message: 'Invalid post fields.' });
+                    return;
+                }
+                updates.content = storedContent;
             }
             if (image !== undefined) updates.image = image;
 
             if (!validPost(updates, true)) {
                 res.status(400).json({ message: 'Invalid post fields.' });
                 return;
+            }
+
+            if (updates.image) {
+                const current = await prisma.post.findFirst({
+                    where: { id: req.params.postId, creatorId: user.id },
+                    select: { image: true },
+                });
+                // An unchanged legacy image stays valid; a new one must exist.
+                if (
+                    current?.image !== updates.image &&
+                    !uploadExists(updates.image, 'postImage')
+                ) {
+                    res.status(400).json({ message: 'Invalid post fields.' });
+                    return;
+                }
             }
             if (updates.title) updates.title = updates.title.trim();
             const post = await prisma.post.updateMany({
