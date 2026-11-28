@@ -4,8 +4,9 @@ import jwt from 'jsonwebtoken';
 import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 import { IDecodedJwt } from '../../../interfaces/IUser/IDecodedJwt';
 import { clearAuthCookies, readRefreshToken } from '../../../utils/authCookies';
-import { JWT_ALGORITHM, removeRefreshToken } from '../../../utils/tokens';
-import { prisma } from '../../../db';
+import { JWT_ALGORITHM } from '../../../utils/tokens';
+import { removeSession } from '../../../utils/sessions';
+import { isUuid } from '../../../utils/validation';
 
 export class Logout implements ICommand {
     public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
@@ -18,20 +19,7 @@ export class Logout implements ICommand {
                         process.env.JWTREFRESHSECRET as string,
                         { algorithms: [JWT_ALGORITHM] }
                     ) as IDecodedJwt;
-                    const user = await prisma.user.findUnique({
-                        where: { id: userId },
-                    });
-                    if (user) {
-                        await prisma.user.update({
-                            where: { id: user.id },
-                            data: {
-                                refreshToken: removeRefreshToken(
-                                    user.refreshToken,
-                                    refreshToken
-                                ),
-                            },
-                        });
-                    }
+                    if (isUuid(userId)) await removeSession(userId, refreshToken);
                 } catch (error) {
                     // An invalid or expired token has no session left to revoke.
                     if (!(error instanceof jwt.JsonWebTokenError)) throw error;

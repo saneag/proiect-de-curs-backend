@@ -415,20 +415,21 @@ test('refresh tokens rotate, tolerate a short overlap and revoke every session w
 
     // Once the overlap has passed, replaying the retired token proves it was copied.
     const row = await prisma.user.findUnique({ where: { email: carol.email } });
-    await prisma.user.update({ where: { id: row.id }, data: {
-        refreshToken: row.refreshToken.split(',').map(entry => entry.includes('.') ? entry.replace(/\.\d+$/, '.1') : entry).join(',') } });
+    await prisma.session.updateMany({ where: { userId: row.id, previousHash: { not: null } },
+        data: { graceUntil: new Date(1000) } });
     const replay = await request('POST', '/user/refreshAccessToken', { refreshToken: first.refreshToken });
     assert.equal(replay.status, 401);
     assert.match(replay.setCookie.join('\n'), /refreshToken=;/);
-    assert.equal((await prisma.user.findUnique({ where: { email: carol.email } })).refreshToken, null);
+    assert.equal(await prisma.session.count({ where: { userId: row.id } }), 0);
     assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: phone.refreshToken })).status, 401);
     assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: overlap.data.refreshToken })).status, 401);
 });
 
 test('refresh tokens are stored hashed and credentials are rate limited', async () => {
     const row = await prisma.user.findUnique({ where: { email: bob.email } });
-    assert(row.refreshToken.split(',').every(entry => /^[0-9a-f]{64}(\.[0-9a-f]{64}\.\d+)?$/.test(entry)));
-    assert(!row.refreshToken.includes(otherTokens.refreshToken));
+    const sessions = await prisma.session.findMany({ where: { userId: row.id } });
+    assert(sessions.length > 0 && sessions.every(session => /^[0-9a-f]{64}$/.test(session.tokenHash)));
+    assert(!sessions.some(session => session.tokenHash === otherTokens.refreshToken));
     assert.equal((await request('POST', '/user/refreshAccessToken', { refreshToken: otherTokens.refreshToken })).status, 200);
     const statuses = [];
     for (let attempt = 0; attempt < 12; attempt++) {

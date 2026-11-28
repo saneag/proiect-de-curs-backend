@@ -12,10 +12,11 @@ import {
 } from '../../../utils/authCookies';
 import {
     JWT_ALGORITHM,
-    rotateRefreshToken,
     signAccessToken,
     signRefreshToken,
 } from '../../../utils/tokens';
+import { revokeAllSessions, rotateSession } from '../../../utils/sessions';
+import { isUuid } from '../../../utils/validation';
 
 export class RefreshAccessToken implements ICommand {
     public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
@@ -37,9 +38,11 @@ export class RefreshAccessToken implements ICommand {
                 { algorithms: [JWT_ALGORITHM] }
             ) as IDecodedJwt;
 
-            const user = await prisma.user.findUnique({
-                where: { id: decoded.userId },
-            });
+            const user = isUuid(decoded.userId)
+                ? await prisma.user.findUnique({
+                      where: { id: decoded.userId },
+                  })
+                : null;
 
             if (!user) {
                 reject();
@@ -48,18 +51,15 @@ export class RefreshAccessToken implements ICommand {
 
             // Every refresh issues a new refresh token and retires the old one.
             const newRefreshToken = signRefreshToken(user.id);
-            const rotation = rotateRefreshToken(
-                user.refreshToken,
+            const rotation = await rotateSession(
+                user.id,
                 refreshToken,
                 newRefreshToken
             );
 
             if (rotation.status === 'reuse') {
                 // A retired token was replayed: assume it was copied and end every session.
-                await prisma.user.update({
-                    where: { id: user.id },
-                    data: { refreshToken: null },
-                });
+                await revokeAllSessions(user.id);
                 reject();
                 return;
             }
@@ -68,11 +68,6 @@ export class RefreshAccessToken implements ICommand {
                 reject();
                 return;
             }
-
-            await prisma.user.update({
-                where: { id: user.id },
-                data: { refreshToken: rotation.stored },
-            });
 
             setAuthCookies(res, signAccessToken(user.id), newRefreshToken);
             res.status(200).json({ message: 'Access token refreshed' });

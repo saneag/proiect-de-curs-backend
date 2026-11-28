@@ -8,7 +8,7 @@ const { isDeepStrictEqual } = require('node:util');
 const { execFileSync } = require('node:child_process');
 const { PrismaClient } = require('../build/generated/prisma/client.js');
 const { PrismaPg } = require('@prisma/adapter-pg');
-const { convert } = require('../scripts/convert-backups.cjs');
+const { convert, mapId } = require('../scripts/convert-backups.cjs');
 const { importData } = require('../scripts/import-backups.cjs');
 
 test('Prisma migrations and atomic backup import on isolated PostgreSQL', { timeout: 180000 }, async t => {
@@ -36,16 +36,16 @@ test('Prisma migrations and atomic backup import on isolated PostgreSQL', { time
         const fixture = require('./backup-fixture.cjs');
         const data = convert(fixture.users, fixture.posts);
         const broken = structuredClone(data);
-        broken.comments[0].creatorId = 'missing';
+        broken.comments[0].creatorId = mapId('user', 'missing');
         await assert.rejects(importData(prisma, broken));
         assert.equal(await prisma.user.count(), 0, 'Failed import must roll back users too');
         await importData(prisma, data);
         assert.equal(await prisma.comment.count(), 1);
         assert.equal(await prisma.follow.count(), 1);
-        assert.equal((await prisma.post.findUnique({ where: { id: 'post-1' } })).title, fixture.posts[0].title);
+        assert.equal((await prisma.post.findUnique({ where: { id: mapId('post', 'post-1') } })).title, fixture.posts[0].title);
         await assert.rejects(importData(prisma, data), /not empty/);
-        await assert.rejects(prisma.reaction.create({ data: { postId: 'post-1', userId: 'user-1', type: 'DISLIKE' } }));
-        await prisma.post.delete({ where: { id: 'post-1' } });
+        await assert.rejects(prisma.reaction.create({ data: { postId: mapId('post', 'post-1'), userId: mapId('user', 'user-1'), type: 'DISLIKE' } }));
+        await prisma.post.delete({ where: { id: mapId('post', 'post-1') } });
         assert.equal(await prisma.comment.count(), 0);
         assert.equal(await prisma.reaction.count(), 0);
         await prisma.follow.deleteMany();

@@ -5,11 +5,8 @@ import { ICommand } from '../../../interfaces/IUser/Command/ICommand';
 
 import { comparePasswords } from '../../../utils/PasswordHashFacade';
 import { setAuthCookies } from '../../../utils/authCookies';
-import {
-    addRefreshToken,
-    signAccessToken,
-    signRefreshToken,
-} from '../../../utils/tokens';
+import { signAccessToken, signRefreshToken } from '../../../utils/tokens';
+import { createSession } from '../../../utils/sessions';
 
 export class Login implements ICommand {
     public async execute(req: Request<Record<string, string>>, res: Response): Promise<void> {
@@ -39,15 +36,7 @@ export class Login implements ICommand {
             const accessToken = signAccessToken(user.id);
             const refreshToken = signRefreshToken(user.id);
 
-            await prisma.user.update({
-                where: { id: user.id },
-                data: {
-                    refreshToken: addRefreshToken(
-                        user.refreshToken,
-                        refreshToken
-                    ),
-                },
-            });
+            await createSession(user.id, refreshToken);
 
             // The tokens travel only as HttpOnly cookies, never in the response body.
             setAuthCookies(res, accessToken, refreshToken);

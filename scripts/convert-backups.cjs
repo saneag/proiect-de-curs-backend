@@ -1,6 +1,17 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Legacy ids (MongoDB ObjectIds) become stable UUIDs, so converting twice gives the same result.
+function mapId(kind, id) {
+    if (UUID.test(id)) return id.toLowerCase();
+    const hex = createHash('sha1').update(`friendo:${kind}:${id}`).digest('hex');
+    const variant = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16);
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
 
 function unwrap(value) {
     if (Array.isArray(value)) return value.map(unwrap);
@@ -29,14 +40,14 @@ function convert(usersSource, postsSource) {
     const ownerId = snapshot => {
         const user = byEmail.get(snapshot?.email);
         assert(user, 'Creator or reaction user is missing from users backup');
-        return user.id;
+        return mapId('user', user.id);
     };
     const relations = (outgoing, incoming, from, to) => {
         const forward = users.flatMap(user => (user[outgoing] || []).map(id => {
             assert(ids.has(id), 'Unknown follow user');
-            return { [from]: user.id, [to]: id };
+            return { [from]: mapId('user', user.id), [to]: mapId('user', id) };
         }));
-        const reverse = users.flatMap(user => (user[incoming] || []).map(id => ({ [from]: id, [to]: user.id })));
+        const reverse = users.flatMap(user => (user[incoming] || []).map(id => ({ [from]: mapId('user', id), [to]: mapId('user', user.id) })));
         const keys = rows => rows.map(row => JSON.stringify(row)).sort();
         assert.deepEqual(keys(forward), keys(reverse), 'Asymmetric follow arrays; reconcile source first');
         return forward;
@@ -44,8 +55,8 @@ function convert(usersSource, postsSource) {
     const data = {
         version: 1,
         users: users.map(user => {
-            const { followers, following, followRequests, followingRequests, ...row } = user;
-            return { ...row, refreshToken: null };
+            const { followers, following, followRequests, followingRequests, refreshToken, ...row } = user;
+            return { ...row, id: mapId('user', user.id) };
         }),
         posts: [], comments: [], reactions: [],
         follows: relations('following', 'followers', 'followerId', 'followingId'),
@@ -55,12 +66,13 @@ function convert(usersSource, postsSource) {
     for (const post of posts) {
         assert(!postIds.has(post.id), 'Duplicate post ID');
         postIds.add(post.id);
-        const { creator, comments = [], reactions = [], ...row } = post;
-        data.posts.push({ ...row, creatorId: ownerId(creator), creatorSnapshot: creator });
+        const { creator, comments = [], reactions = [], tags, ...row } = post;
+        data.posts.push({ ...row, id: mapId('post', post.id), creatorId: ownerId(creator), creatorSnapshot: creator });
         comments.forEach((comment, index) => {
             assert.equal(comment.postId, post.id, 'Comment refers to a different post');
             const { creator, ...row } = comment;
-            data.comments.push({ ...row, id: row.id || `${post.id}-comment-${index + 1}`,
+            data.comments.push({ ...row, id: mapId('comment', row.id || `${post.id}-comment-${index + 1}`),
+                postId: mapId('post', post.id),
                 creatorId: ownerId(creator), creatorSnapshot: creator });
         });
         const seen = new Set();
@@ -69,8 +81,8 @@ function convert(usersSource, postsSource) {
             assert(!seen.has(userId), 'Duplicate reaction for user/post');
             seen.add(userId);
             assert.equal(Number(reaction.like === true) + Number(reaction.dislike === true), 1, 'Ambiguous reaction');
-            data.reactions.push({ id: reaction.id || `${post.id}-reaction-${index + 1}`,
-                postId: post.id, userId, type: reaction.like ? 'LIKE' : 'DISLIKE' });
+            data.reactions.push({ id: mapId('reaction', reaction.id || `${post.id}-reaction-${index + 1}`),
+                postId: mapId('post', post.id), userId, type: reaction.like ? 'LIKE' : 'DISLIKE' });
         });
     }
     return data;
@@ -90,4 +102,4 @@ if (require.main === module) {
     fs.writeFileSync(output, JSON.stringify(data, null, 2) + '\n', { mode: 0o600 });
     console.log('Converted backup:', counts(data));
 }
-module.exports = { convert, counts };
+module.exports = { convert, counts, mapId };

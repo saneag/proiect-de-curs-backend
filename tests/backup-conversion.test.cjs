@@ -1,22 +1,23 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { convert } = require('../scripts/convert-backups.cjs');
+const { convert, mapId } = require('../scripts/convert-backups.cjs');
 const fixture = require('./backup-fixture.cjs');
 
 test('converts Extended JSON, IDs, dates, snapshots and relational data without mutating source', () => {
     const before = JSON.stringify(fixture);
     const data = convert(fixture.users, fixture.posts);
     assert.equal(JSON.stringify(fixture), before);
-    assert.equal(data.users[0].id, 'user-1');
+    assert.equal(data.users[0].id, mapId('user', 'user-1'));
     assert.equal(data.users[0].passwordHash, 'fixture-hash');
-    assert.equal(data.users[0].refreshToken, null);
+    assert.equal('refreshToken' in data.users[0], false);
+    assert.equal('tags' in data.posts[0], false);
     assert.equal(data.posts[0].createdAt, '2023-06-01T12:00:00.000Z');
-    assert.equal(data.posts[0].creatorId, 'user-1');
+    assert.equal(data.posts[0].creatorId, mapId('user', 'user-1'));
     assert.deepEqual(data.posts[0].creatorSnapshot, fixture.posts[0].creator);
-    assert.equal(data.comments[0].postId, 'post-1');
-    assert.equal(data.comments[0].id, 'post-1-comment-1');
-    assert.deepEqual(data.reactions[0], { id: 'reaction-1', postId: 'post-1', userId: 'user-1', type: 'LIKE' });
-    assert.deepEqual(data.follows, [{ followerId: 'user-1', followingId: 'user-2' }]);
+    assert.equal(data.comments[0].postId, mapId('post', 'post-1'));
+    assert.equal(data.comments[0].id, mapId('comment', 'post-1-comment-1'));
+    assert.deepEqual(data.reactions[0], { id: mapId('reaction', 'reaction-1'), postId: mapId('post', 'post-1'), userId: mapId('user', 'user-1'), type: 'LIKE' });
+    assert.deepEqual(data.follows, [{ followerId: mapId('user', 'user-1'), followingId: mapId('user', 'user-2') }]);
     assert(!/"(_id|__v|\$oid|\$date)"/.test(JSON.stringify(data)));
     assert.deepEqual(convert(fixture.users, fixture.posts), data);
 });

@@ -20,17 +20,17 @@ enum ReactionType {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  firstName    String
-  lastName     String
-  email        String   @unique
+  id           String   @id @default(uuid()) @db.Uuid
+  firstName    String   @db.VarChar(20)
+  lastName     String   @db.VarChar(20)
+  email        String   @unique @db.VarChar(254)
   passwordHash String
-  refreshToken String?
-  avatarUrl    String   @default("")
-  description  String   @default("")
+  avatarUrl    String   @default("") @db.VarChar(255)
+  description  String   @default("") @db.VarChar(300)
   role         Role     @default(user)
   createdAt    DateTime @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+  sessions     Session[]
   posts        Post[]
   comments     Comment[]
   reactions    Reaction[]
@@ -43,32 +43,31 @@ model User {
 }
 
 model Post {
-  id        String   @id @default(uuid())
-  title     String
+  id        String   @id @default(uuid()) @db.Uuid
+  title     String   @db.VarChar(50)
   content   String
-  image     String   @default("")
-  creatorId String
+  image     String   @default("") @db.VarChar(255)
+  creatorId String @db.Uuid
   creator   User     @relation(fields: [creatorId], references: [id])
   creatorSnapshot Json
-  tags      String[] @default([])
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   comments  Comment[]
   reactions Reaction[]
 
   @@index([createdAt, id])
-  @@index([creatorId])
+  @@index([creatorId, createdAt])
   @@map("posts")
 }
 
 model Comment {
-  id        String   @id @default(uuid())
-  postId    String
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String @db.Uuid
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  creatorId String
+  creatorId String @db.Uuid
   creator   User     @relation(fields: [creatorId], references: [id])
   creatorSnapshot Json
-  content   String
+  content   String   @db.VarChar(500)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
@@ -78,10 +77,10 @@ model Comment {
 }
 
 model Reaction {
-  id     String @id @default(uuid())
-  postId String
+  id     String @id @default(uuid()) @db.Uuid
+  postId String @db.Uuid
   post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  userId String
+  userId String @db.Uuid
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
   type   ReactionType
 
@@ -91,8 +90,8 @@ model Reaction {
 }
 
 model Follow {
-  followerId String
-  followingId String
+  followerId String @db.Uuid
+  followingId String @db.Uuid
   follower User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
   following User @relation("Followed", fields: [followingId], references: [id], onDelete: Cascade)
 
@@ -102,12 +101,27 @@ model Follow {
 }
 
 model FollowRequest {
-  senderId String
-  recipientId String
+  senderId String @db.Uuid
+  recipientId String @db.Uuid
   sender User @relation("RequestSender", fields: [senderId], references: [id], onDelete: Cascade)
   recipient User @relation("RequestRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@id([senderId, recipientId])
   @@index([recipientId])
   @@map("follow_requests")
+}
+
+model Session {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique @db.Char(64)
+  previousHash String?   @db.Char(64)
+  graceUntil   DateTime? @db.Timestamptz(3)
+  expiresAt    DateTime  @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([userId, createdAt])
+  @@index([previousHash])
+  @@map("sessions")
 }

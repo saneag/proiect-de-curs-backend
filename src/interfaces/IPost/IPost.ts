@@ -10,7 +10,6 @@ export interface IPost extends IImagePost {
     updatedAt: Date;
     comments: IComment[];
     reactions: IPostReaction[];
-    tags: string[];
 }
 
 export interface IBasicPost {

@@ -1,7 +1,6 @@
 export interface IUser extends ISimpleUser {
     id: string;
     passwordHash: string;
-    refreshToken?: string | null;
     description: string;
     role: 'user' | 'moderator' | 'admin';
     createdAt: Date;

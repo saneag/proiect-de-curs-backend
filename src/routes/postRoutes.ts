@@ -9,8 +9,17 @@ import PostController from '../controllers/Post/PostController';
 import { getSidebar } from '../controllers/Sidebar/getSidebar';
 
 import { checkAuth } from '../middlewares';
+import { isUuid } from '../utils/validation';
 
 const postRoutes = express.Router();
+
+// Ids are native UUIDs, so anything else cannot match a post.
+postRoutes.param('postId', (_req, res, next, postId) =>
+    isUuid(postId)
+        ? next()
+        : res.status(404).json({ message: 'Post not found.' })
+);
+
 const upload = multerInstance.init('postImage').getMulterUpload();
 
 postRoutes.get(
