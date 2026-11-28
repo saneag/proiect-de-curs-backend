@@ -3,7 +3,7 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 
-import { uploadOwnerPrefix } from '../utils/uploads';
+import { uploadOwnerPrefix, uploadsRoot } from '../utils/uploads';
 
 class MulterInstance {
     private static _instance: MulterInstance;
@@ -24,7 +24,7 @@ class MulterInstance {
     public init(folderPath: string) {
         const storage = multer.diskStorage({
             destination: (_, __, cb) => {
-                const destination = path.resolve(__dirname, '../uploads', folderPath);
+                const destination = path.join(uploadsRoot, folderPath);
                 fs.mkdirSync(destination, { recursive: true });
                 cb(null, destination);
             },

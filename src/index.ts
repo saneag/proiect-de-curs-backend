@@ -1,5 +1,4 @@
 import express from 'express';
-import * as path from 'path';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
@@ -9,6 +8,7 @@ import Database from './db';
 
 import userRoutes from './routes/userRoutes';
 import postRoutes from './routes/postRoutes';
+import { uploadsRoot } from './utils/uploads';
 
 const app = express();
 dotenv.config();
@@ -49,7 +49,7 @@ app.use((req, res, next) => {
 });
 app.use(
     '/uploads',
-    express.static(path.join(__dirname, 'uploads'), {
+    express.static(uploadsRoot, {
         setHeaders: (res) => {
             // Uploads must never run as a page, even if a file is not a real image.
             res.setHeader(

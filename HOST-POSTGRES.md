@@ -27,7 +27,7 @@ BACKEND_PORT=5001
 The external `home-apps` Docker network must exist and PostgreSQL must permit its
 subnet for this database/role. `host.docker.internal` is mapped to the Docker host
 by the host deployment file. Keep the Compose project name unchanged so the
-existing `uploads_data` volume is reused. Do not publish PostgreSQL from Docker.
+images are read from `/srv/hdd/project-images/friendo` (`UPLOADS_HOST_DIR`); copy any old `uploads_data` volume content there first. Do not publish PostgreSQL from Docker.
 Use the matching frontend release: its Nginx proxy resolves `friendo-api`, the
 unique backend network alias, to avoid collisions with Toggle Ctrl's `api` service.
 

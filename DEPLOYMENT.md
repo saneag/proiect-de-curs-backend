@@ -46,7 +46,7 @@ Keep `.env` private (`chmod 600 .env`). No MongoDB settings are needed.
 Schedule a maintenance window and stop writes. Stop the existing `api`/`frontend`
 containers and old `mongodb` container if present, preserving all volumes. Upload
 `backups/postgresql/data.json` separately: it is intentionally not in Git. Transfer
-existing uploads separately, preserving their paths and the `uploads_data` volume.
+existing uploads separately, preserving their paths in `/srv/hdd/project-images/friendo` (the `UPLOADS_HOST_DIR` default), which the API mounts at `/uploads`.
 
 ```bash
 sudo docker compose config --quiet

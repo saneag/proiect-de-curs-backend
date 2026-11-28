@@ -6,8 +6,7 @@
     "scripts": {
         "start": "nodemon src/index.ts",
         "build": "node -e \"require('fs').rmSync('./build',{recursive:true,force:true})\" && prisma generate && tsc",
-        "copy-uploads": "node -e \"require('fs').cpSync('./src/uploads','./build/uploads',{recursive:true})\"",
-        "prod": "npm run build && npm run copy-uploads && node build/index.js",
+        "prod": "npm run build && node build/index.js",
         "test": "npm run build && node --test tests/integrity.test.cjs",
         "prisma:validate": "prisma validate",
         "prisma:generate": "prisma generate && tsc -p tsconfig.prisma.json",

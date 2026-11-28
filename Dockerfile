@@ -7,7 +7,7 @@ RUN npm ci
 COPY tsconfig.json prisma.config.ts ./
 COPY prisma ./prisma
 COPY src ./src
-RUN npm run build && npm run copy-uploads
+RUN npm run build
 
 # Separate one-shot migration/import image; the API image does not need the CLI.
 FROM build AS migration
@@ -26,7 +26,6 @@ RUN apt-get update \
     && apt-get purge -y --auto-remove python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/build ./build
-RUN chown -R node:node /app/build/uploads
 USER node
 EXPOSE 5000
 CMD ["node", "build/index.js"]

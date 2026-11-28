@@ -6,3 +6,6 @@ generated/
 .prisma-build/
 src/generated/
 __pycache__/
+
+# Uploaded images live outside git (UPLOADS_DIR; default src/uploads)
+src/uploads/

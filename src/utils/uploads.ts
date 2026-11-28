@@ -5,7 +5,10 @@ import { prisma } from '../db';
 
 export type UploadFolder = 'postImage' | 'userAvatar';
 
-export const uploadsRoot = path.resolve(__dirname, '../uploads');
+// UPLOADS_DIR lets a server keep images outside the project, for example on a data disk.
+export const uploadsRoot = path.resolve(
+    process.env.UPLOADS_DIR || path.join(__dirname, '../uploads')
+);
 
 const uploadPathPattern =
     /^uploads\/(postImage|userAvatar)\/([^/\\?#\u0000-\u001f]{1,200})$/;

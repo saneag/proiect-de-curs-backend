@@ -82,6 +82,7 @@ Start the frontend in another terminal with `npm run dev`. Vite normally listens
 | `JWTSECRET` | Access-token signing secret, at least 32 characters. |
 | `JWTREFRESHSECRET` | Separate refresh-token signing secret, at least 32 characters. |
 | `PORT` | Internal API port; defaults to 5000. |
+| `UPLOADS_DIR` | Optional. Where images are stored and served from; defaults to `src/uploads`. Compose sets it to `/uploads`. |
 | `FRONTEND_ORIGIN` | Allowed browser origin, such as `http://localhost:5173` for development. |
 | `TRUST_PROXY` | Number of reverse proxies in front of the API (Compose sets 1). Rate limits use the real client address only when this is correct. |
 | `COOKIE_SECURE` | Optional. Sessions are stored in HttpOnly cookies, marked `Secure` automatically when `FRONTEND_ORIGIN` starts with `https://`. Set `true` or `false` to override. |
@@ -101,7 +102,7 @@ Keep `.env` private and out of Git. The launcher selects available host ports fo
 | --- | --- |
 | `npm start` | Run the development API with nodemon. |
 | `npm run build` | Generate Prisma Client and compile into `build/`. |
-| `npm run prod` | Build, copy source uploads into `build/uploads`, and run the compiled API. |
+| `npm run prod` | Build and run the compiled API. Set `UPLOADS_DIR` to keep images outside the project. |
 | `npm run prisma:validate` | Validate the Prisma schema. |
 | `npm run prisma:generate` | Generate and compile Prisma Client for import/test use. |
 | `npm run db:migrate` | Apply committed migrations to the configured database. |
@@ -114,14 +115,14 @@ src/controllers/   User and post operations
 src/db/            Prisma client and database connection
 src/middlewares/   Authentication and validation
 src/routes/        HTTP routes
-src/uploads/       Development uploads and initial images
+src/uploads/       Development uploads (not in git)
 prisma/            Schema and committed SQL migrations
 scripts/           Conversion/import tools and Ubuntu startup launcher
 tests/             API, import, conversion, and launcher tests
 compose.yaml       PostgreSQL, migration, API, and frontend services
 ```
 
-Use the Docker workflow below for server deployments and persistent uploads. The host `prod` command copies source uploads during each build.
+Use the Docker workflow below for server deployments and persistent uploads.
 
 ## Deploy on an Ubuntu server
 
@@ -180,7 +181,7 @@ sudo docker compose up -d postgres
 sudo docker compose run --rm migrate
 ```
 
-For a new empty installation, continue to startup. To retain MongoDB records, transfer and import the converted backup **before starting the API**, following [BACKUP-IMPORT.md](BACKUP-IMPORT.md). Git does not contain private backups. Transfer existing uploaded images separately and preserve their paths and the deployment's `uploads_data` volume.
+For a new empty installation, continue to startup. To retain MongoDB records, transfer and import the converted backup **before starting the API**, following [BACKUP-IMPORT.md](BACKUP-IMPORT.md). Git does not contain private backups. Transfer existing uploaded images separately and preserve their paths inside `/srv/hdd/project-images/friendo`.
 
 ### 4. Start manually, including after a reboot
 
@@ -241,7 +242,7 @@ curl -i http://127.0.0.1:5001/api/hf/user
 
 Use the launcher's printed ports if different. Expect frontend HTTP 200, API HTTP 403 without a token, and migration service exit code 0. Test login, feed, profiles, comments, reactions, uploads, and session restoration. Restart the stack and confirm records and images persist.
 
-Data lives in `postgres_data` and uploaded images in `uploads_data`. Back up both. Stop the application with `sudo docker compose stop`; stop its managed tunnel separately with `sudo systemctl stop friendo-tunnel`.
+Data lives in `postgres_data` and uploaded images in `/srv/hdd/project-images/friendo` on the server disk (`UPLOADS_HOST_DIR`, mounted at `/uploads` with `UPLOADS_DIR`). Back up both. The folder must be writable by the container's `node` user (uid 1000). Stop the application with `sudo docker compose stop`; stop its managed tunnel separately with `sudo systemctl stop friendo-tunnel`.
 
 For updates: back up, push your changes to GitHub, then run the launcher. It pulls both repositories' configured upstream branches with `git pull --ff-only`, then rebuilds all three images before stopping the app; Compose runs the migration service before starting the API. Tracked local changes or a failed pull/build leave the running app untouched. Git runs as each checkout's owner, including when the launcher uses sudo. Do not reimport backups into an existing database. Keep the Compose project name stable so the same volumes are used.
 
