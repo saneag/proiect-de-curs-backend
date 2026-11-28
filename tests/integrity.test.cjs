@@ -436,3 +436,57 @@ test('refresh tokens are stored hashed and credentials are rate limited', async 
     }
     assert(statuses.includes(429), statuses.join(','));
 });
+
+test('the sidebar needs login and only shows activity on your own posts', async () => {
+    assert.equal((await request('GET', '/sidebar')).status, 403);
+    const created = await request('POST', '/create-post', { title: 'Sidebar post', content: '<p>Hello sidebar</p>' }, tokens.accessToken);
+    assert.equal(created.status, 201);
+    const post = (await request('GET', '/get-posts?search=Sidebar', null, tokens.accessToken)).data.posts[0];
+    assert.equal((await request('PATCH', `/react-to-post/${post.id}/like`, {}, otherTokens.accessToken)).status, 200);
+    assert.equal((await request('PATCH', `/react-to-post/${post.id}/comment`, { content: 'x'.repeat(150) }, otherTokens.accessToken)).status, 200);
+
+    const owner = await request('GET', '/sidebar', null, tokens.accessToken);
+    assert.equal(owner.status, 200);
+    assert(owner.data.stats.members >= 2 && owner.data.stats.posts >= 1 && owner.data.stats.comments >= 1);
+    const trending = owner.data.trending.find(item => item.id === post.id);
+    assert.equal(trending.likes, 1);
+    assert.equal(trending.title, 'Sidebar post');
+    assert.equal(owner.data.activity.length, 1);
+    assert.equal(owner.data.activity[0].postId, post.id);
+    assert.equal(owner.data.activity[0].author, 'Bobby Tester');
+    assert.equal(owner.data.activity[0].snippet.length, 91);
+    assert(!JSON.stringify(owner.data).match(/@example\.com|passwordHash|refreshToken/));
+
+    // The commenter is not told about their own comment.
+    const commenter = await request('GET', '/sidebar', null, otherTokens.accessToken);
+    assert.equal(commenter.status, 200);
+    assert.equal(commenter.data.activity.length, 0);
+});
+
+test('comments accept one character but never blank text', async () => {
+    const post = (await request('GET', '/get-posts?search=Sidebar', null, tokens.accessToken)).data.posts[0];
+    assert.equal((await request('PATCH', `/react-to-post/${post.id}/comment`, { content: 'k' }, otherTokens.accessToken)).status, 200);
+    assert.equal((await request('PATCH', `/react-to-post/${post.id}/comment`, { content: 'k'.repeat(500) }, otherTokens.accessToken)).status, 200);
+    for (const content of ['', '   ', '\n\t', 5, null, 'x'.repeat(501)]) {
+        assert.equal((await request('PATCH', `/react-to-post/${post.id}/comment`, { content }, otherTokens.accessToken)).status, 400, JSON.stringify(content));
+    }
+});
+
+test('the newest post and the newest comment come first', async () => {
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    assert.equal((await request('POST', '/create-post', { title: 'Order older', content: '<p>first</p>' }, tokens.accessToken)).status, 201);
+    await wait(20);
+    assert.equal((await request('POST', '/create-post', { title: 'Order newer', content: '<p>second</p>' }, tokens.accessToken)).status, 201);
+    const posts = (await request('GET', '/get-posts?limit=10&page=1', null, tokens.accessToken)).data.posts;
+    assert(posts.findIndex(post => post.title === 'Order newer') < posts.findIndex(post => post.title === 'Order older'));
+
+    const target = posts.find(post => post.title === 'Order older');
+    for (const content of ['first comment', 'second comment', 'third comment']) {
+        assert.equal((await request('PATCH', `/react-to-post/${target.id}/comment`, { content }, otherTokens.accessToken)).status, 200);
+        await wait(20);
+    }
+    const listed = (await request('GET', '/get-posts?limit=10&page=1', null, tokens.accessToken)).data.posts.find(post => post.id === target.id);
+    assert.deepEqual(listed.comments.map(comment => comment.content), ['third comment', 'second comment', 'first comment']);
+    const single = (await request('GET', `/get-post/${target.id}`, null, tokens.accessToken)).data.post;
+    assert.deepEqual(single.comments.map(comment => comment.content), ['third comment', 'second comment', 'first comment']);
+});

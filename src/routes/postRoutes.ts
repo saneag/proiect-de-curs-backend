@@ -6,6 +6,7 @@ import { deleteUpload } from '../shared/deleteUpload';
 import { uploadLimiter } from '../shared/rateLimiters';
 
 import PostController from '../controllers/Post/PostController';
+import { getSidebar } from '../controllers/Sidebar/getSidebar';
 
 import { checkAuth } from '../middlewares';
 
@@ -23,6 +24,8 @@ postRoutes.get(
     checkAuth,
     PostController.getPost.bind(PostController)
 );
+
+postRoutes.get('/sidebar', checkAuth, getSidebar);
 
 postRoutes.post(
     '/create-post',

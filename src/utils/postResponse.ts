@@ -8,7 +8,7 @@ export const snapshot = (user: ISimpleUser) => ({
     avatarUrl: user.avatarUrl,
 });
 export const postInclude = {
-    comments: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+    comments: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
     reactions: { orderBy: { id: 'asc' } },
 } satisfies Prisma.PostInclude;
 type PostWithRelations = Prisma.PostGetPayload<{ include: typeof postInclude }>;

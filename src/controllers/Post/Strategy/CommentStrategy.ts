@@ -8,11 +8,11 @@ export class CommentStrategy implements IStrategy {
             const content = req.body.content;
             if (
                 typeof content !== 'string' ||
-                content.trim().length < 3 ||
-                content.trim().length > 300
+                content.trim().length < 1 ||
+                content.trim().length > 500
             ) {
                 res.status(400).json({
-                    message: 'Comment must contain 3–300 characters.',
+                    message: 'Comment must contain 1–500 characters.',
                 });
                 return;
             }
