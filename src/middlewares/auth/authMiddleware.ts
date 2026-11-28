@@ -9,8 +9,8 @@ export const loginValidation = [
 
 export const registerValidation = [
     body('email', 'Invalid email format').isEmail(),
-    body('password', 'Password must contain at least 12 characters').isLength({
-        min: 12,
+    body('password', 'Password must contain at least 6 characters').isLength({
+        min: 6,
     }),
     body('password', 'Password must be at most 72 UTF-8 bytes').custom(
         (value: string) => Buffer.byteLength(value, 'utf8') <= 72
